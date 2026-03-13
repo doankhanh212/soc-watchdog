@@ -1,12 +1,14 @@
 import { ScrollArea } from "@/components/ui/scroll-area";
 import type { AttackMapAlert } from "@/services/wazuhApi";
 import { formatAttackTime, getAttackSeverity } from "@/utils/attackMap";
-import { Activity, Wifi } from "lucide-react";
+import { Activity, ArrowRight, Wifi } from "lucide-react";
 
 interface Props {
   alerts: AttackMapAlert[];
   loading?: boolean;
 }
+
+const MAX_FEED = 50;
 
 const AttackFeed = ({ alerts, loading }: Props) => {
   return (
@@ -34,10 +36,10 @@ const AttackFeed = ({ alerts, loading }: Props) => {
             ))
           ) : alerts.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 bg-secondary/10 px-4 py-10 text-center text-sm text-muted-foreground">
-              No geo-located alerts were available in the last 24 hours.
+              No alerts with source IPs were found in the last 24 hours.
             </div>
           ) : (
-            alerts.slice(0, 40).map((alert) => {
+            alerts.slice(0, MAX_FEED).map((alert) => {
               const severity = getAttackSeverity(alert.level);
               return (
                 <article
@@ -46,28 +48,36 @@ const AttackFeed = ({ alerts, loading }: Props) => {
                 >
                   <div className="mb-3 flex items-start justify-between gap-3">
                     <div>
-                      <div className="text-[11px] font-mono uppercase tracking-[0.22em] text-info/80">
-                        {alert.country} → {alert.agent}
+                      <div className="flex items-center gap-1.5 text-[11px] font-mono uppercase tracking-[0.22em] text-info/80">
+                        <span>{alert.country || "Unknown"}</span>
+                        <ArrowRight className="h-3 w-3 text-muted-foreground" />
+                        <span>{alert.agent}</span>
                       </div>
                       <p className="mt-1 text-sm font-medium text-foreground">{alert.description}</p>
                     </div>
-                    <span className={`soc-badge ${severity.badgeClass}`}>
+                    <span className={`soc-badge shrink-0 ${severity.badgeClass}`}>
                       {severity.label}
                     </span>
                   </div>
 
-                  <div className="grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
+                  <div className="grid gap-3 text-xs text-muted-foreground sm:grid-cols-2 md:grid-cols-4">
                     <div>
                       <div className="font-mono uppercase tracking-[0.18em]">Timestamp</div>
                       <div className="mt-1 text-foreground">{formatAttackTime(alert.rawTimestamp)}</div>
                     </div>
                     <div>
                       <div className="font-mono uppercase tracking-[0.18em]">Source IP</div>
-                      <div className="mt-1 font-mono text-foreground">{alert.srcIp}</div>
+                      <div className="mt-1 font-mono text-primary">{alert.srcIp || "—"}</div>
                     </div>
+                    {alert.destIp && (
+                      <div>
+                        <div className="font-mono uppercase tracking-[0.18em]">Target IP</div>
+                        <div className="mt-1 font-mono text-info">{alert.destIp}</div>
+                      </div>
+                    )}
                     <div className="flex items-center gap-2">
                       <Activity className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-foreground">{alert.timestamp}</span>
+                      <span className="text-foreground">Level {alert.level}</span>
                     </div>
                   </div>
                 </article>

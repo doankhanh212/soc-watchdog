@@ -19,6 +19,34 @@ export const MITRE_TACTICS = [
   "Impact",
 ] as const;
 
+/** Map from canonical English tactic name → Vietnamese label shown in the UI. */
+export const TACTIC_VI: Record<(typeof MITRE_TACTICS)[number], string> = {
+  "Initial Access":       "Đảm nhập hệ thống",
+  "Execution":            "Thực thi mã",
+  "Persistence":          "Duy trì truy cập",
+  "Privilege Escalation": "Nâng quyền hạn",
+  "Defense Evasion":      "Trốn tránh phòng thủ",
+  "Credential Access":    "Đánh cắp thông tin xác thực",
+  "Discovery":            "Khám phá hệ thống",
+  "Lateral Movement":     "Di chuyển ngang",
+  "Collection":           "Thu thập dữ liệu",
+  "Exfiltration":         "Rò rỉ dữ liệu",
+  "Impact":               "Tác động hệ thống",
+};
+
+/** Return the Vietnamese tactic label for any known tactic value (English key or Vietnamese). */
+export function tacticToVi(value: string): string {
+  const normalized = normalizeMitreTactic(value);
+  const match = MITRE_TACTICS.find((t) => normalizeMitreTactic(t) === normalized) as
+    | (typeof MITRE_TACTICS)[number]
+    | undefined;
+  if (match) return TACTIC_VI[match];
+  // If already a Vietnamese label, return as-is
+  const viValues = Object.values(TACTIC_VI);
+  if (viValues.includes(value as any)) return value;
+  return value;
+}
+
 export interface EnrichedMitreTechnique extends MitreMatrixTechnique {
   name: string;
   description: string;

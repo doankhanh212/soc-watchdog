@@ -5,8 +5,8 @@ import {
 } from "@/components/ui/tooltip";
 import { ScrollArea, ScrollBar } from "@/components/ui/scroll-area";
 import type { EnrichedMitreTactic, EnrichedMitreTechnique } from "@/utils/mitre";
-import { getHeatTone } from "@/utils/mitre";
-import { severityColor, severityLabel } from "@/utils/formatters";
+import { getHeatTone, tacticToVi } from "@/utils/mitre";
+import { maucDoViPham, muccDoViPham } from "@/utils/formatters";
 import { ShieldAlert, Sparkles } from "lucide-react";
 
 interface Props {
@@ -31,16 +31,16 @@ const MitreMatrix = ({
           <div className="mb-2 flex items-center gap-2 text-primary">
             <ShieldAlert className="h-4 w-4" />
             <span className="text-[11px] font-mono uppercase tracking-[0.28em] text-primary/80">
-              MITRE ATT&amp;CK Matrix
+              Ma trận MITRE ATT&amp;CK
             </span>
           </div>
-          <h2 className="text-lg font-semibold text-foreground">Technique coverage across active tactics</h2>
+          <h2 className="text-lg font-semibold text-foreground">Phạm vi kỹ thuật theo chiến thuật tấn công</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Real detections from Wazuh and Suricata over the last 24 hours, normalized into the enterprise ATT&amp;CK kill chain.
+            Cảnh báo từ Wazuh và Suricata trong 24 giờ qua, chuẩn hóa theo cậu trúc MITRE ATT&amp;CK.
           </p>
         </div>
         <div className="rounded-full border border-info/30 bg-info/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.24em] text-info">
-          Hover for detail
+          Click để xem chi tiết
         </div>
       </div>
 
@@ -67,9 +67,9 @@ const MitreMatrix = ({
               >
                 <div className="mb-3 flex items-center justify-between gap-3 border-b border-border/60 pb-3">
                   <div>
-                    <h3 className="text-sm font-semibold text-foreground">{tactic.tactic}</h3>
+                    <h3 className="text-sm font-semibold text-foreground">{tacticToVi(tactic.tactic)}</h3>
                     <p className="mt-1 text-[11px] font-mono uppercase tracking-[0.24em] text-muted-foreground">
-                      {tactic.totalAlerts.toLocaleString()} alerts
+                      {tactic.totalAlerts.toLocaleString("vi-VN")} cảnh báo
                     </p>
                   </div>
                   <Sparkles className="h-4 w-4 text-primary/70" />
@@ -78,7 +78,7 @@ const MitreMatrix = ({
                 <div className="space-y-3">
                   {tactic.techniques.length === 0 ? (
                     <div className="rounded-xl border border-dashed border-border/70 bg-secondary/10 px-3 py-5 text-center text-xs text-muted-foreground">
-                      No detections
+                      Không có phát hiện
                     </div>
                   ) : (
                     tactic.techniques.map((technique) => {
@@ -104,14 +104,14 @@ const MitreMatrix = ({
                                     {technique.name}
                                   </p>
                                 </div>
-                                <span className={`soc-badge ${severityColor(technique.maxSeverity)}`}>
-                                  {severityLabel(technique.maxSeverity)}
+                                <span className={`soc-badge ${maucDoViPham(technique.maxSeverity)}`}>
+                                  {muccDoViPham(technique.maxSeverity)}
                                 </span>
                               </div>
 
                               <div className="flex items-center justify-between gap-3 text-xs text-muted-foreground">
-                                <span className="font-mono uppercase tracking-[0.2em]">Alerts</span>
-                                <span className="font-mono text-foreground">{technique.alertCount.toLocaleString()}</span>
+                                <span className="font-mono uppercase tracking-[0.2em]">Phát hiện</span>
+                                <span className="font-mono text-foreground">{technique.alertCount.toLocaleString("vi-VN")}</span>
                               </div>
 
                               <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-background/50">
@@ -126,8 +126,8 @@ const MitreMatrix = ({
                             <div className="space-y-2">
                               <div className="flex items-center justify-between gap-3">
                                 <span className="font-mono text-xs font-semibold text-primary">{technique.id}</span>
-                                <span className={`soc-badge ${severityColor(technique.maxSeverity)}`}>
-                                  {severityLabel(technique.maxSeverity)}
+                                <span className={`soc-badge ${maucDoViPham(technique.maxSeverity)}`}>
+                                  {muccDoViPham(technique.maxSeverity)}
                                 </span>
                               </div>
                               <p className="text-sm font-medium text-foreground">{technique.name}</p>
@@ -135,7 +135,7 @@ const MitreMatrix = ({
                                 {technique.description}
                               </p>
                               <div className="text-[11px] font-mono uppercase tracking-[0.18em] text-info">
-                                {technique.alertCount.toLocaleString()} detections
+                                {technique.alertCount.toLocaleString("vi-VN")} lần phát hiện
                               </div>
                             </div>
                           </TooltipContent>

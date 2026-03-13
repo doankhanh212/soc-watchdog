@@ -39,15 +39,15 @@ const MitrePage = () => {
             <div className="mb-3 flex items-center gap-2 text-primary">
               <ShieldAlert className="h-4 w-4" />
               <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-primary/80">
-                SOC MITRE ATT&amp;CK Intelligence
+                Nền tảng SOC · Phân tích MITRE ATT&amp;CK
               </span>
             </div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              Enterprise ATT&amp;CK visualization for real detections
+              Bản đồ MITRE ATT&amp;CK – Phân tích kỹ thuật tấn công
             </h1>
             <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
-              Correlates MITRE-tagged alerts from Wazuh and Suricata into a live ATT&amp;CK matrix, exposes technique drilldowns,
-              and reconstructs the observed attack chain for SOC analysts.
+              Tổng hợp cảnh báo có nhãn MITRE từ Wazuh và Suricata thành ma trận ATT&amp;CK trực tiếp,
+              hỗ trợ phân tích sâu từng kỹ thuật và tái tạo chuỗi tiến trình tấn công cho đội ngũ SOC.
             </p>
           </div>
 
@@ -55,16 +55,16 @@ const MitrePage = () => {
             <div className="rounded-2xl border border-info/30 bg-info/10 px-4 py-3">
               <div className="flex items-center gap-2 text-info">
                 <Activity className="h-4 w-4" />
-                <span className="text-[11px] font-mono uppercase tracking-[0.18em]">Auto refresh</span>
+                <span className="text-[11px] font-mono uppercase tracking-[0.18em]">Tự động làm mới</span>
               </div>
-              <p className="mt-2 text-sm text-foreground">Every 30 seconds</p>
+              <p className="mt-2 text-sm text-foreground">Mỗi 30 giây</p>
             </div>
             <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3">
               <div className="flex items-center gap-2 text-primary">
                 <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
-                <span className="text-[11px] font-mono uppercase tracking-[0.18em]">Last update</span>
+                <span className="text-[11px] font-mono uppercase tracking-[0.18em]">Cập nhật lần cuối</span>
               </div>
-              <p className="mt-2 text-sm text-foreground">{lastUpdated ? formatMitreTime(lastUpdated.toISOString()) : "Waiting for first sync"}</p>
+              <p className="mt-2 text-sm text-foreground">{lastUpdated ? formatMitreTime(lastUpdated.toISOString()) : "Đang chờ kết nối..."}</p>
             </div>
           </div>
         </div>

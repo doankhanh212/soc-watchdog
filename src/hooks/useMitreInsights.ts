@@ -10,6 +10,7 @@ import {
   deriveAttackChain,
   enrichMitreTactics,
   resolveMitreTacticLabel,
+  tacticToVi,
 } from "@/utils/mitre";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
@@ -47,7 +48,7 @@ export function useMitreInsights() {
       const metadata = catalogMap.get(technique.id);
       return {
         ...technique,
-        tactic: resolveMitreTacticLabel(technique.tactic),
+        tactic: tacticToVi(resolveMitreTacticLabel(technique.tactic)),
         name: metadata?.name ?? technique.id,
       };
     });
@@ -56,7 +57,7 @@ export function useMitreInsights() {
   const topTactics = useMemo(() => {
     return (overviewQuery.data?.topTactics ?? []).map((item: MitreStatItem) => ({
       ...item,
-      label: resolveMitreTacticLabel(item.label),
+      label: tacticToVi(resolveMitreTacticLabel(item.label)),
     }));
   }, [overviewQuery.data?.topTactics]);
 

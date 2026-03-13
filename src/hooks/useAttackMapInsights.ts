@@ -1,10 +1,34 @@
 import { getAttackMapData } from "@/services/wazuhApi";
+import { getCachedGeo, resolveGeoIPs } from "@/utils/geoip";
 import { useQuery } from "@tanstack/react-query";
 
 export function useAttackMapInsights() {
   const query = useQuery({
     queryKey: ["attack-map-insights"],
-    queryFn: () => getAttackMapData({ streamSize: 120 }),
+    queryFn: async () => {
+      const data = await getAttackMapData({ streamSize: 200 });
+
+      // ── GeoIP enrichment for alerts lacking country data ────────────────
+      const unresolvedIps = data.alerts
+        .filter((a) => !a.country && a.srcIp)
+        .map((a) => a.srcIp);
+
+      if (unresolvedIps.length > 0) {
+        await resolveGeoIPs(unresolvedIps);
+
+        for (const alert of data.alerts) {
+          if (!alert.country && alert.srcIp) {
+            const geo = getCachedGeo(alert.srcIp);
+            if (geo) {
+              alert.country = geo.country;
+              alert.coords = [geo.lon, geo.lat];
+            }
+          }
+        }
+      }
+
+      return data;
+    },
     refetchInterval: 30_000,
     refetchIntervalInBackground: true,
   });

@@ -47,6 +47,9 @@ const ATTACK_MAP_SOURCE_FIELDS = [
   "rule.description",
   "data.srcip",
   "data.src_ip",
+  "data.dest_ip",
+  "data.dstip",
+  "data.dest_port",
   "agent.name",
   "agent.ip",
   "geo.country",
@@ -176,9 +179,12 @@ export interface AttackMapAlert {
   rawTimestamp: string;
   country: string;
   srcIp: string;
+  destIp: string;
   description: string;
   level: number;
   agent: string;
+  /** [lon, lat] resolved by GeoIP – takes priority over country centroid lookup */
+  coords?: [number, number];
 }
 
 export interface AttackMapStat {
@@ -196,6 +202,7 @@ export interface AttackMapSeverityTotals {
 export interface AttackMapData {
   alerts: AttackMapAlert[];
   topCountries: AttackMapStat[];
+  topIps: AttackMapStat[];
   attackTypes: AttackMapStat[];
   severity: AttackMapSeverityTotals;
   totalAttacks: number;
@@ -329,8 +336,9 @@ function parseAttackMapAlert(hit: any): AttackMapAlert {
     id: String(hit._id ?? ""),
     timestamp: fmtDateTime(rawTimestamp),
     rawTimestamp,
-    country: parseAttackCountry(source) || "Unknown",
-    srcIp: String(data.srcip ?? data.src_ip ?? "Unknown"),
+    country: parseAttackCountry(source) || "",
+    srcIp: String(data.srcip ?? data.src_ip ?? ""),
+    destIp: String(data.dest_ip ?? data.dstip ?? ""),
     description: String(rule.description ?? "Unknown alert"),
     level: Number(rule.level ?? 0),
     agent: String(agent.name ?? agent.ip ?? "SOC Core"),
@@ -772,7 +780,7 @@ export async function getGeoData(): Promise<GeoPoint[]> {
 
 /** Real-time attack-map view with limited live stream plus server-side aggregations. */
 export async function getAttackMapData(params?: { streamSize?: number }): Promise<AttackMapData> {
-  const streamSize = params?.streamSize ?? 120;
+  const streamSize = params?.streamSize ?? 200;
 
   const data = await esPost({
     size: streamSize,
@@ -781,7 +789,15 @@ export async function getAttackMapData(params?: { streamSize?: number }): Promis
       attack_country: {
         type: "keyword",
         script: {
-          source: "String country = ''; if (params._source.containsKey('geo')) { def geo = params._source['geo']; if (geo != null && geo.containsKey('country') && geo['country'] != null) { country = geo['country']; } } if (country.isEmpty() && params._source.containsKey('GeoLocation')) { def legacy = params._source['GeoLocation']; if (legacy != null && legacy.containsKey('country_name') && legacy['country_name'] != null) { country = legacy['country_name']; } } if (!country.isEmpty()) emit(country);",
+          source:
+            "String country = ''; if (params._source.containsKey('geo')) { def geo = params._source['geo']; if (geo != null && geo.containsKey('country') && geo['country'] != null) { country = geo['country']; } } if (country.isEmpty() && params._source.containsKey('GeoLocation')) { def legacy = params._source['GeoLocation']; if (legacy != null && legacy.containsKey('country_name') && legacy['country_name'] != null) { country = legacy['country_name']; } } if (!country.isEmpty()) emit(country);",
+        },
+      },
+      attack_src_ip: {
+        type: "keyword",
+        script: {
+          source:
+            "def d = params._source.containsKey('data') ? params._source['data'] : null; if (d != null) { if (d.containsKey('srcip') && d['srcip'] != null) { emit(d['srcip'].toString()); } else if (d.containsKey('src_ip') && d['src_ip'] != null) { emit(d['src_ip'].toString()); } }",
         },
       },
     },
@@ -798,15 +814,6 @@ export async function getAttackMapData(params?: { streamSize?: number }): Promis
               minimum_should_match: 1,
             },
           },
-          {
-            bool: {
-              should: [
-                { exists: { field: "geo.country" } },
-                { exists: { field: "GeoLocation.country_name" } },
-              ],
-              minimum_should_match: 1,
-            },
-          },
         ],
       },
     },
@@ -814,6 +821,13 @@ export async function getAttackMapData(params?: { streamSize?: number }): Promis
       top_countries: {
         terms: {
           field: "attack_country",
+          size: 12,
+          order: { _count: "desc" },
+        },
+      },
+      top_ips: {
+        terms: {
+          field: "attack_src_ip",
           size: 10,
           order: { _count: "desc" },
         },
@@ -821,7 +835,7 @@ export async function getAttackMapData(params?: { streamSize?: number }): Promis
       attack_types: {
         terms: {
           field: "rule.description",
-          size: 6,
+          size: 8,
           order: { _count: "desc" },
         },
       },
@@ -842,6 +856,10 @@ export async function getAttackMapData(params?: { streamSize?: number }): Promis
   return {
     alerts: (data.hits?.hits ?? []).map(parseAttackMapAlert),
     topCountries: (data.aggregations?.top_countries?.buckets ?? []).map((bucket: any) => ({
+      label: String(bucket.key ?? "Unknown"),
+      count: Number(bucket.doc_count ?? 0),
+    })),
+    topIps: (data.aggregations?.top_ips?.buckets ?? []).map((bucket: any) => ({
       label: String(bucket.key ?? "Unknown"),
       count: Number(bucket.doc_count ?? 0),
     })),
