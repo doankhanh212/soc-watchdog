@@ -14,6 +14,7 @@ const navItems = [
   { label: "Dòng thời gian", path: "/timeline" },
   { label: "Tình báo", path: "/threat-intel" },
   { label: "Phản ứng", path: "/response" },
+  { label: "Bản đồ tấn công", path: "/attack-map" },
 ];
 
 const DashboardHeader = () => {

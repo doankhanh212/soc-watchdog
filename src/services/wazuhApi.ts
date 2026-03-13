@@ -976,3 +976,119 @@ export async function getThreatIntel(params?: { size?: number }): Promise<Threat
     })
     .sort((a: ThreatIntelEntry, b: ThreatIntelEntry) => b.maxLevel - a.maxLevel || b.hits - a.hits);
 }
+
+// ── Geo Attack Map page ───────────────────────────────────────────────────────
+
+export interface AttackGeoRawEvent {
+  id:          string;
+  timestamp:   string;
+  srcIp:       string;
+  description: string;
+  level:       number;
+}
+
+export interface AiAnomalyEvent {
+  id:        string;
+  timestamp: string;
+  srcIp:     string;
+  riskScore: number;
+  severity:  string;
+}
+
+/** Raw source-IP bearing wazuh-alerts from the last hour for geo attack map. */
+export async function getAttackGeoRawEvents(
+  params?: { size?: number },
+): Promise<AttackGeoRawEvent[]> {
+  const size = params?.size ?? 500;
+
+  const data = await esPost({
+    size,
+    sort: [{ "@timestamp": { order: "desc" } }],
+    query: {
+      bool: {
+        must: [
+          { range: { "@timestamp": { gte: "now-1h" } } },
+          {
+            bool: {
+              should: [
+                { exists: { field: "data.srcip" } },
+                { exists: { field: "data.src_ip" } },
+              ],
+              minimum_should_match: 1,
+            },
+          },
+        ],
+      },
+    },
+    _source: ["@timestamp", "rule.level", "rule.description", "data.srcip", "data.src_ip"],
+  });
+
+  return (data.hits?.hits ?? [])
+    .map((hit: any) => {
+      const src   = hit._source ?? {};
+      const d     = src.data   ?? {};
+      const srcIp = String(d.srcip ?? d.src_ip ?? "");
+      if (!srcIp) return null;
+      return {
+        id:          String(hit._id ?? ""),
+        timestamp:   String(src["@timestamp"] ?? ""),
+        srcIp,
+        description: String(src.rule?.description ?? ""),
+        level:       Number(src.rule?.level ?? 0),
+      };
+    })
+    .filter(Boolean) as AttackGeoRawEvent[];
+}
+
+/**
+ * AI anomaly events from the ai-anomaly-alerts index.
+ * Always returns [] gracefully if the index is unavailable (future-ready).
+ */
+export async function getAiAnomalyEvents(
+  params?: { size?: number },
+): Promise<AiAnomalyEvent[]> {
+  const size  = params?.size ?? 200;
+  const aiUrl = `${BASE_URL}/ai-anomaly-alerts/_search`;
+  const ctrl  = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), DEFAULT_TIMEOUT_MS);
+
+  try {
+    const res = await fetch(aiUrl, {
+      method: "POST",
+      signal: ctrl.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader(),
+      },
+      body: JSON.stringify({
+        size,
+        sort: [{ "@timestamp": { order: "desc" } }],
+        query: { range: { "@timestamp": { gte: "now-1h" } } },
+        _source: ["@timestamp", "src_ip", "risk_score", "severity"],
+      }),
+    });
+
+    if (!res.ok) return [];
+
+    const json = await res.json();
+    return (json.hits?.hits ?? [])
+      .map((hit: any) => {
+        const src   = hit._source ?? {};
+        const srcIp = String(src.src_ip ?? "");
+        if (!srcIp) return null;
+        return {
+          id:        String(hit._id ?? ""),
+          timestamp: String(src["@timestamp"] ?? ""),
+          srcIp,
+          riskScore: Number(src.risk_score ?? 0),
+          severity:  String(src.severity ?? "medium"),
+        };
+      })
+      .filter(Boolean) as AiAnomalyEvent[];
+  } catch {
+    // Index not yet deployed or network error — degrade gracefully.
+    return [];
+  } finally {
+    clearTimeout(timer);
+  }
+}

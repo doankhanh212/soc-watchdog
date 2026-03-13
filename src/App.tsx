@@ -16,6 +16,7 @@ const MitrePage = lazy(() => import("@/pages/MitrePage"));
 const TimelinePage = lazy(() => import("@/pages/TimelinePage"));
 const ThreatIntelligence = lazy(() => import("@/pages/ThreatIntelligence"));
 const AutomatedResponse = lazy(() => import("@/pages/AutomatedResponse"));
+const AttackMapPage = lazy(() => import("@/pages/AttackMapPage"));
 const NotFound = lazy(() => import("@/pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -47,6 +48,7 @@ const App = () => (
               <Route path="/timeline" element={<TimelinePage />} />
               <Route path="/threat-intel" element={<ThreatIntelligence />} />
               <Route path="/response" element={<AutomatedResponse />} />
+              <Route path="/attack-map" element={<AttackMapPage />} />
             </Route>
             <Route path="*" element={<NotFound />} />
           </Routes>
