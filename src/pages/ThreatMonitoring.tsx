@@ -1,77 +1,56 @@
-import { Search, AlertTriangle, Eye, TrendingUp } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import PaginationBar from "@/components/PaginationBar";
-import { useWazuhData } from "@/hooks/useWazuhData";
-import type { WazuhAlertDisplay } from "@/services/wazuhApi";
+import { Suspense, lazy } from "react";
+import AttackFeed from "@/components/soc/attack-map/AttackFeed";
+import AttackStatsPanel from "@/components/soc/attack-map/AttackStatsPanel";
+import { useAttackMapInsights } from "@/hooks/useAttackMapInsights";
+import { formatAttackTime } from "@/utils/attackMap";
+import { Globe2, RadioTower, RefreshCcw, ShieldAlert } from "lucide-react";
 
-const sevLabel = (level: number) =>
-  level >= 14 ? "Nghiêm trọng" : level >= 10 ? "Cao" : "Trung bình";
-
-const severityColor: Record<string, string> = {
-  "Nghiêm trọng": "bg-danger/20 text-danger",
-  "Cao":           "bg-warning/20 text-warning",
-  "Trung bình":    "bg-info/20 text-info",
-};
-
-function buildThreats(alerts: WazuhAlertDisplay[]) {
-  return alerts.map((a) => ({
-    id:          a.id,
-    time:        a.timestamp,
-    source:      a.srcIp ? "Wazuh/NET" : "Wazuh/HIDS",
-    severity:    sevLabel(a.level),
-    description: a.description,
-    ip:          a.srcIp || a.agent,
-  }));
-}
+const RealTimeAttackMap = lazy(() => import("@/components/soc/attack-map/RealTimeAttackMap"));
 
 const ThreatMonitoring = () => {
-  const { alerts, loading, error } = useWazuhData({
-    needs: { alerts: true },
-    limits: { alerts: 1000 },
-    pollMs: 10_000,
-  });
-
-  const threats = useMemo(() => buildThreats(alerts), [alerts]);
-
-  const stats = useMemo(() => {
-    let critical = 0;
-    let high = 0;
-    let medium = 0;
-    for (const t of threats) {
-      if (t.severity === "Nghiêm trọng") critical++;
-      else if (t.severity === "Cao") high++;
-      else if (t.severity === "Trung bình") medium++;
-    }
-    return { critical, high, medium };
-  }, [threats]);
-
-  const pageSize = 50;
-  const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(threats.length / pageSize));
-
-  useEffect(() => {
-    setPage(1);
-  }, [threats.length]);
-
-  const viewThreats = useMemo(() => {
-    const start = (page - 1) * pageSize;
-    return threats.slice(start, start + pageSize);
-  }, [page, threats]);
+  const { data, loading, refreshing, lastUpdated, error } = useAttackMapInsights();
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-sm font-mono font-semibold text-primary uppercase tracking-wider flex items-center gap-2">
-          <Eye className="h-4 w-4" />
-          Giám sát mối đe dọa – Luồng trực tiếp
-        </h2>
-        <div className="flex items-center gap-2 bg-secondary/50 rounded px-3 py-1.5">
-          <Search className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-mono text-muted-foreground">
-            {loading ? "…" : `${threats.length} mối đe dọa được phát hiện (tối đa 1.000)`}
-          </span>
+    <div className="space-y-6">
+      <section className="soc-card border-info/20 bg-[radial-gradient(circle_at_top_left,rgba(56,189,248,0.14),transparent_30%),radial-gradient(circle_at_top_right,rgba(239,68,68,0.12),transparent_24%),linear-gradient(180deg,rgba(2,6,23,0.96),rgba(15,23,42,0.94))]">
+        <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+          <div>
+            <div className="mb-3 flex items-center gap-2 text-info">
+              <Globe2 className="h-4 w-4" />
+              <span className="text-[11px] font-mono uppercase tracking-[0.3em] text-info/80">
+                Cyber Threat Theater
+              </span>
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+              Real-time global attack map for SOC operations
+            </h1>
+            <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
+              A live cyber warfare view of geo-located Wazuh and Suricata detections, with neon attack lines, severity-aware alert flow,
+              and 24-hour threat pressure metrics for active defense monitoring.
+            </p>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-success/30 bg-success/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-success">
+                <RadioTower className="h-4 w-4" />
+                <span className="text-[11px] font-mono uppercase tracking-[0.18em]">Feed status</span>
+              </div>
+              <p className="mt-2 text-sm text-foreground">Live sync every 30 seconds</p>
+            </div>
+
+            <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-3">
+              <div className="flex items-center gap-2 text-primary">
+                <RefreshCcw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+                <span className="text-[11px] font-mono uppercase tracking-[0.18em]">Last sync</span>
+              </div>
+              <p className="mt-2 text-sm text-foreground">
+                {lastUpdated ? formatAttackTime(lastUpdated.toISOString()) : "Waiting for first response"}
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      </section>
 
       {error && (
         <div className="px-4 py-2 rounded border border-danger/30 bg-danger/10 text-danger text-xs font-mono">
@@ -79,82 +58,27 @@ const ThreatMonitoring = () => {
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
-        <div className="soc-card soc-glow-danger">
-          <div className="flex items-center gap-2 mb-1">
-            <AlertTriangle className="h-4 w-4 text-danger" />
-            <span className="text-xs font-mono text-muted-foreground uppercase">Nghiêm trọng</span>
-          </div>
-          <p className="text-2xl font-bold font-mono text-danger">
-            {loading ? "…" : stats.critical}
-          </p>
-        </div>
-        <div className="soc-card soc-glow-primary">
-          <div className="flex items-center gap-2 mb-1">
-            <TrendingUp className="h-4 w-4 text-warning" />
-            <span className="text-xs font-mono text-muted-foreground uppercase">Cao</span>
-          </div>
-          <p className="text-2xl font-bold font-mono text-warning">
-            {loading ? "…" : stats.high}
-          </p>
-        </div>
-        <div className="soc-card soc-glow-accent">
-          <div className="flex items-center gap-2 mb-1">
-            <Eye className="h-4 w-4 text-info" />
-            <span className="text-xs font-mono text-muted-foreground uppercase">Trung bình</span>
-          </div>
-          <p className="text-2xl font-bold font-mono text-info">
-            {loading ? "…" : stats.medium}
-          </p>
-        </div>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.85fr)]">
+        <Suspense
+          fallback={
+            <div className="soc-card flex h-[634px] items-center justify-center border-info/20 bg-[linear-gradient(180deg,rgba(2,6,23,0.98),rgba(3,10,22,0.96))]">
+              <p className="text-xs font-mono text-muted-foreground animate-pulse">Loading global attack map…</p>
+            </div>
+          }
+        >
+          <RealTimeAttackMap alerts={data?.alerts ?? []} loading={loading} />
+        </Suspense>
+        <AttackStatsPanel data={data} loading={loading} />
       </div>
 
-      <div className="soc-card">
-        <div className="overflow-auto max-h-[500px]">
-          <table className="soc-table">
-            <thead>
-              <tr>
-                <th>Thời gian</th>
-                <th>Nguồn</th>
-                <th>Mức độ</th>
-                <th>Mô tả</th>
-                <th>Xuất phát</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                [1, 2, 3].map((i) => (
-                  <tr key={i}>
-                    {[1, 2, 3, 4, 5].map((j) => (
-                      <td key={j}><div className="h-3 w-20 bg-secondary rounded animate-pulse" /></td>
-                    ))}
-                  </tr>
-                ))
-              ) : threats.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="text-center text-muted-foreground py-4 text-xs font-mono">
-                    Không có dữ liệu trong 24 giờ qua
-                  </td>
-                </tr>
-              ) : (
-                viewThreats.map((t) => (
-                  <tr key={t.id}>
-                    <td className="text-muted-foreground whitespace-nowrap">{t.time.split(" ")[1]}</td>
-                    <td><span className="soc-badge bg-secondary text-foreground">{t.source}</span></td>
-                    <td><span className={`soc-badge ${severityColor[t.severity]}`}>{t.severity}</span></td>
-                    <td className="text-foreground max-w-[300px] truncate">{t.description}</td>
-                    <td className="text-accent">{t.ip}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      <div className="grid gap-6">
+        <div className="flex items-center gap-2 text-primary">
+          <ShieldAlert className="h-4 w-4" />
+          <span className="text-[11px] font-mono uppercase tracking-[0.28em] text-primary/80">
+            Alert Intelligence Feed
+          </span>
         </div>
-        {!loading && threats.length > 0 && (
-          <div className="pt-3">
-            <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
-          </div>
-        )}
+        <AttackFeed alerts={data?.alerts ?? []} loading={loading} />
       </div>
     </div>
   );

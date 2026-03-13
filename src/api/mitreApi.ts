@@ -23,7 +23,7 @@ export async function fetchMitreAttackData(): Promise<MitreTechnique[]> {
       id: (obj.external_references as Array<{ source_name: string; external_id: string }>)
         ?.find((r) => r.source_name === "mitre-attack")?.external_id ?? "",
       name: obj.name as string,
-      description: ((obj.description as string) ?? "").slice(0, 200),
+      description: (obj.description as string) ?? "",
       tactics: ((obj.kill_chain_phases as Array<{ phase_name: string }>) ?? []).map((p) => p.phase_name),
       url: (obj.external_references as Array<{ source_name: string; url?: string }>)
         ?.find((r) => r.source_name === "mitre-attack")?.url ?? "",

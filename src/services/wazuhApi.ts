@@ -40,6 +40,19 @@ const ALERT_SOURCE_FIELDS = [
   "agent.ip",
 ];
 
+const ATTACK_MAP_SOURCE_FIELDS = [
+  "@timestamp",
+  "timestamp",
+  "rule.level",
+  "rule.description",
+  "data.srcip",
+  "data.src_ip",
+  "agent.name",
+  "agent.ip",
+  "geo.country",
+  "GeoLocation.country_name",
+];
+
 // ── Exported types ────────────────────────────────────────────────────────────
 
 export interface WazuhAlertDisplay {
@@ -70,6 +83,72 @@ export interface MitreEntry {
   techniques: { id: string; name: string; count: number }[];
 }
 
+export interface MitreMatrixTechnique {
+  id: string;
+  tactic: string;
+  alertCount: number;
+  maxSeverity: number;
+  topHost: string;
+}
+
+export interface MitreMatrixTactic {
+  tactic: string;
+  totalAlerts: number;
+  techniques: MitreMatrixTechnique[];
+}
+
+export interface MitreStatItem {
+  label: string;
+  count: number;
+}
+
+export interface MitreAttackChainEvent {
+  tactic: string;
+  techniqueId: string;
+  timestamp: string;
+  level: number;
+  host: string;
+  srcIp: string;
+  description: string;
+}
+
+export interface MitreOverviewData {
+  tactics: MitreMatrixTactic[];
+  totalDetections: number;
+  topTechniques: MitreMatrixTechnique[];
+  topTactics: MitreStatItem[];
+  topHosts: MitreStatItem[];
+  recentChain: MitreAttackChainEvent[];
+}
+
+export interface MitreTechniqueTimelinePoint {
+  time: string;
+  alerts: number;
+  maxSeverity: number;
+}
+
+export interface MitreTechniqueAlert {
+  id: string;
+  timestamp: string;
+  level: number;
+  description: string;
+  srcIp: string;
+  agent: string;
+  tactic: string;
+}
+
+export interface MitreTechniqueDetail {
+  techniqueId: string;
+  tactic: string;
+  totalAlerts: number;
+  maxSeverity: number;
+  topAttackerIp: string;
+  affectedHostCount: number;
+  affectedHosts: MitreStatItem[];
+  recentAlerts: MitreTechniqueAlert[];
+  timeline: MitreTechniqueTimelinePoint[];
+}
+
 export interface AttackTimelinePoint {
   time: string;     // "HH:MM" label for the chart
   suricata: number; // network / IDS alerts (have data.srcip)
@@ -89,6 +168,37 @@ export interface KpiData {
 export interface GeoPoint {
   country: string;  // GeoLocation.country_name
   hits: number;
+}
+
+export interface AttackMapAlert {
+  id: string;
+  timestamp: string;
+  rawTimestamp: string;
+  country: string;
+  srcIp: string;
+  description: string;
+  level: number;
+  agent: string;
+}
+
+export interface AttackMapStat {
+  label: string;
+  count: number;
+}
+
+export interface AttackMapSeverityTotals {
+  low: number;
+  medium: number;
+  high: number;
+  critical: number;
+}
+
+export interface AttackMapData {
+  alerts: AttackMapAlert[];
+  topCountries: AttackMapStat[];
+  attackTypes: AttackMapStat[];
+  severity: AttackMapSeverityTotals;
+  totalAttacks: number;
 }
 
 export interface ThreatIntelEntry {
@@ -190,6 +300,43 @@ function parseHit(hit: any): WazuhAlertDisplay {
   };
 }
 
+function parseMitreChainHit(hit: any): MitreAttackChainEvent {
+  const parsed = parseHit(hit);
+
+  return {
+    tactic: parsed.mitreTactics[0] ?? "Unclassified",
+    techniqueId: parsed.mitreIds[0] ?? "Unknown",
+    timestamp: String(hit?._source?.["@timestamp"] ?? hit?._source?.timestamp ?? ""),
+    level: parsed.level,
+    host: parsed.agent || "Unassigned",
+    srcIp: parsed.srcIp || "Unknown",
+    description: parsed.description,
+  };
+}
+
+function parseAttackCountry(source: any): string {
+  return String(source?.geo?.country ?? source?.GeoLocation?.country_name ?? "");
+}
+
+function parseAttackMapAlert(hit: any): AttackMapAlert {
+  const source = hit._source ?? {};
+  const data = source.data ?? {};
+  const rule = source.rule ?? {};
+  const agent = source.agent ?? {};
+  const rawTimestamp = String(source["@timestamp"] ?? source.timestamp ?? "");
+
+  return {
+    id: String(hit._id ?? ""),
+    timestamp: fmtDateTime(rawTimestamp),
+    rawTimestamp,
+    country: parseAttackCountry(source) || "Unknown",
+    srcIp: String(data.srcip ?? data.src_ip ?? "Unknown"),
+    description: String(rule.description ?? "Unknown alert"),
+    level: Number(rule.level ?? 0),
+    agent: String(agent.name ?? agent.ip ?? "SOC Core"),
+  };
+}
+
 // ── Public API functions ──────────────────────────────────────────────────────
 
 /** All Wazuh alerts from the last 24 hours, sorted newest-first. */
@@ -275,6 +422,203 @@ export async function getMitreTechniques(params?: { tacticSize?: number; techniq
       .map((x: any) => ({ id: String(x.key), name: String(x.key), count: Number(x.doc_count ?? 0) }))
       .sort((a: any, c: any) => c.count - a.count),
   }));
+}
+
+/** Aggregated MITRE ATT&CK overview for the dedicated matrix page. */
+export async function getMitreOverview(): Promise<MitreOverviewData> {
+  const data = await esPost({
+    size: 0,
+    query: {
+      bool: {
+        must: [
+          { exists: { field: "rule.mitre.id" } },
+          { range: { "@timestamp": { gte: "now-24h" } } },
+        ],
+      },
+    },
+    aggs: {
+      by_tactic: {
+        terms: {
+          field: "rule.mitre.tactic",
+          size: 32,
+          missing: "Unclassified",
+        },
+        aggs: {
+          by_technique: {
+            terms: {
+              field: "rule.mitre.id",
+              size: 200,
+              order: { _count: "desc" },
+            },
+            aggs: {
+              max_level: { max: { field: "rule.level" } },
+              top_host: {
+                terms: {
+                  field: "agent.name",
+                  size: 1,
+                  missing: "Unassigned",
+                },
+              },
+            },
+          },
+        },
+      },
+      top_hosts: {
+        terms: {
+          field: "agent.name",
+          size: 8,
+          missing: "Unassigned",
+        },
+      },
+      recent_chain: {
+        top_hits: {
+          size: 120,
+          sort: [{ "@timestamp": { order: "asc" } }],
+          _source: [
+            "@timestamp",
+            "rule.level",
+            "rule.description",
+            "rule.mitre.id",
+            "rule.mitre.tactic",
+            "agent.name",
+            "data.srcip",
+            "data.src_ip",
+          ],
+        },
+      },
+    },
+  });
+
+  const tacticBuckets = data.aggregations?.by_tactic?.buckets ?? [];
+  const tactics: MitreMatrixTactic[] = tacticBuckets.map((bucket: any) => ({
+    tactic: String(bucket.key ?? "Unclassified"),
+    totalAlerts: Number(bucket.doc_count ?? 0),
+    techniques: (bucket.by_technique?.buckets ?? []).map((technique: any) => ({
+      id: String(technique.key ?? ""),
+      tactic: String(bucket.key ?? "Unclassified"),
+      alertCount: Number(technique.doc_count ?? 0),
+      maxSeverity: Number(technique.max_level?.value ?? 0),
+      topHost: String(technique.top_host?.buckets?.[0]?.key ?? "Unassigned"),
+    })),
+  }));
+
+  const topTechniques = tactics
+    .flatMap((tactic) => tactic.techniques)
+    .sort((a, b) => b.alertCount - a.alertCount || b.maxSeverity - a.maxSeverity)
+    .slice(0, 8);
+
+  const topTactics = tactics
+    .map((tactic) => ({ label: tactic.tactic, count: tactic.totalAlerts }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+
+  const topHosts = (data.aggregations?.top_hosts?.buckets ?? []).map((bucket: any) => ({
+    label: String(bucket.key ?? "Unassigned"),
+    count: Number(bucket.doc_count ?? 0),
+  }));
+
+  const recentChain = (data.aggregations?.recent_chain?.hits?.hits ?? []).map(parseMitreChainHit);
+
+  return {
+    tactics,
+    totalDetections: Number(data.hits?.total?.value ?? data.hits?.total ?? 0),
+    topTechniques,
+    topTactics,
+    topHosts,
+    recentChain,
+  };
+}
+
+/** Detailed view for a single MITRE technique over the last 24h. */
+export async function getMitreTechniqueDetail(
+  techniqueId: string,
+  params?: { recentSize?: number },
+): Promise<MitreTechniqueDetail> {
+  const recentSize = params?.recentSize ?? 10;
+
+  const data = await esPost({
+    size: recentSize,
+    sort: [{ "@timestamp": { order: "desc" } }],
+    query: {
+      bool: {
+        must: [
+          { term: { "rule.mitre.id": techniqueId } },
+          { range: { "@timestamp": { gte: "now-24h" } } },
+        ],
+      },
+    },
+    aggs: {
+      max_level: { max: { field: "rule.level" } },
+      top_tactic: {
+        terms: {
+          field: "rule.mitre.tactic",
+          size: 1,
+          missing: "Unclassified",
+        },
+      },
+      top_attacker: {
+        terms: {
+          field: "data.srcip",
+          size: 1,
+          missing: "Unknown",
+        },
+      },
+      affected_hosts: {
+        terms: {
+          field: "agent.name",
+          size: 8,
+          missing: "Unassigned",
+        },
+      },
+      affected_host_count: {
+        cardinality: { field: "agent.name" },
+      },
+      timeline: {
+        date_histogram: {
+          field: "@timestamp",
+          fixed_interval: "30m",
+          min_doc_count: 0,
+          extended_bounds: { min: "now-24h", max: "now" },
+        },
+        aggs: {
+          max_level: { max: { field: "rule.level" } },
+        },
+      },
+    },
+    _source: ALERT_SOURCE_FIELDS,
+  });
+
+  const recentAlerts = (data.hits?.hits ?? []).map((hit: any) => {
+    const parsed = parseHit(hit);
+    return {
+      id: parsed.id,
+      timestamp: String(hit?._source?.["@timestamp"] ?? hit?._source?.timestamp ?? ""),
+      level: parsed.level,
+      description: parsed.description,
+      srcIp: parsed.srcIp || "Unknown",
+      agent: parsed.agent || "Unassigned",
+      tactic: parsed.mitreTactics[0] ?? "Unclassified",
+    };
+  });
+
+  return {
+    techniqueId,
+    tactic: String(data.aggregations?.top_tactic?.buckets?.[0]?.key ?? "Unclassified"),
+    totalAlerts: Number(data.hits?.total?.value ?? data.hits?.total ?? 0),
+    maxSeverity: Number(data.aggregations?.max_level?.value ?? 0),
+    topAttackerIp: String(data.aggregations?.top_attacker?.buckets?.[0]?.key ?? "Unknown"),
+    affectedHostCount: Number(data.aggregations?.affected_host_count?.value ?? 0),
+    affectedHosts: (data.aggregations?.affected_hosts?.buckets ?? []).map((bucket: any) => ({
+      label: String(bucket.key ?? "Unassigned"),
+      count: Number(bucket.doc_count ?? 0),
+    })),
+    recentAlerts,
+    timeline: (data.aggregations?.timeline?.buckets ?? []).map((bucket: any) => ({
+      time: fmtHourLabel(bucket.key_as_string ?? bucket.key),
+      alerts: Number(bucket.doc_count ?? 0),
+      maxSeverity: Number(bucket.max_level?.value ?? 0),
+    })),
+  };
 }
 
 /** 1-hour bucket histogram for the last 24 hours (24 data points). */
@@ -424,6 +768,95 @@ export async function getGeoData(): Promise<GeoPoint[]> {
     country: String(b.key),
     hits:    Number(b.doc_count),
   }));
+}
+
+/** Real-time attack-map view with limited live stream plus server-side aggregations. */
+export async function getAttackMapData(params?: { streamSize?: number }): Promise<AttackMapData> {
+  const streamSize = params?.streamSize ?? 120;
+
+  const data = await esPost({
+    size: streamSize,
+    sort: [{ "@timestamp": { order: "desc" } }],
+    runtime_mappings: {
+      attack_country: {
+        type: "keyword",
+        script: {
+          source: "String country = ''; if (params._source.containsKey('geo')) { def geo = params._source['geo']; if (geo != null && geo.containsKey('country') && geo['country'] != null) { country = geo['country']; } } if (country.isEmpty() && params._source.containsKey('GeoLocation')) { def legacy = params._source['GeoLocation']; if (legacy != null && legacy.containsKey('country_name') && legacy['country_name'] != null) { country = legacy['country_name']; } } if (!country.isEmpty()) emit(country);",
+        },
+      },
+    },
+    query: {
+      bool: {
+        must: [
+          { range: { "@timestamp": { gte: "now-24h" } } },
+          {
+            bool: {
+              should: [
+                { exists: { field: "data.srcip" } },
+                { exists: { field: "data.src_ip" } },
+              ],
+              minimum_should_match: 1,
+            },
+          },
+          {
+            bool: {
+              should: [
+                { exists: { field: "geo.country" } },
+                { exists: { field: "GeoLocation.country_name" } },
+              ],
+              minimum_should_match: 1,
+            },
+          },
+        ],
+      },
+    },
+    aggs: {
+      top_countries: {
+        terms: {
+          field: "attack_country",
+          size: 10,
+          order: { _count: "desc" },
+        },
+      },
+      attack_types: {
+        terms: {
+          field: "rule.description",
+          size: 6,
+          order: { _count: "desc" },
+        },
+      },
+      severity: {
+        filters: {
+          filters: {
+            low: { range: { "rule.level": { lt: 7 } } },
+            medium: { range: { "rule.level": { gte: 7, lt: 10 } } },
+            high: { range: { "rule.level": { gte: 10, lt: 14 } } },
+            critical: { range: { "rule.level": { gte: 14 } } },
+          },
+        },
+      },
+    },
+    _source: ATTACK_MAP_SOURCE_FIELDS,
+  });
+
+  return {
+    alerts: (data.hits?.hits ?? []).map(parseAttackMapAlert),
+    topCountries: (data.aggregations?.top_countries?.buckets ?? []).map((bucket: any) => ({
+      label: String(bucket.key ?? "Unknown"),
+      count: Number(bucket.doc_count ?? 0),
+    })),
+    attackTypes: (data.aggregations?.attack_types?.buckets ?? []).map((bucket: any) => ({
+      label: String(bucket.key ?? "Unknown"),
+      count: Number(bucket.doc_count ?? 0),
+    })),
+    severity: {
+      low: Number(data.aggregations?.severity?.buckets?.low?.doc_count ?? 0),
+      medium: Number(data.aggregations?.severity?.buckets?.medium?.doc_count ?? 0),
+      high: Number(data.aggregations?.severity?.buckets?.high?.doc_count ?? 0),
+      critical: Number(data.aggregations?.severity?.buckets?.critical?.doc_count ?? 0),
+    },
+    totalAttacks: Number(data.hits?.total?.value ?? data.hits?.total ?? 0),
+  };
 }
 
 /** Active Response events (firewall-drop / host-deny / active-response), 24h. */
