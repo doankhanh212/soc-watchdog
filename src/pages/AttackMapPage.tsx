@@ -9,7 +9,7 @@
 //
 //  Refreshes every 30 seconds.  Empty state is handled gracefully.
 
-import { Suspense, lazy, useMemo } from "react";
+import { Suspense, lazy, useMemo, type ReactNode } from "react";
 import TopOriginsTable from "@/components/soc/geo-attack/TopOriginsTable";
 import GeoAttackFeed from "@/components/soc/geo-attack/GeoAttackFeed";
 import { useGeoAttackPage } from "@/hooks/useGeoAttackPage";
@@ -30,21 +30,28 @@ const AttackWorldMap = lazy(
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+interface KpiItem {
+  icon: ReactNode;
+  label: string;
+  value: string;
+  color: string;
+  border: string;
+  bg: string;
+  truncate?: boolean;
+}
+
 const AttackMapPage = () => {
   const { data, loading, refreshing, lastUpdated, error } = useGeoAttackPage();
 
-  const events            = data?.events       ?? [];
-  const countryStats      = data?.countryStats ?? [];
+  const events            = useMemo(() => data?.events       ?? [], [data]);
+  const countryStats      = useMemo(() => data?.countryStats ?? [], [data]);
   const totalAttacks      = data?.totalAttacks ?? 0;
   const aiTotal           = data?.aiTotal      ?? 0;
   const distinctCountries = countryStats.length;
 
-  const latestEvent = useMemo(
-    () => (events.length > 0 ? events[0] : null),
-    [events],
-  );
+  const latestEvent = events[0] ?? null;
 
-  const kpis = [
+  const kpis: KpiItem[] = [
     {
       icon: <ShieldAlert className="h-5 w-5" />,
       label: "Tổng tấn công",
@@ -153,9 +160,9 @@ const AttackMapPage = () => {
                 {k.label}
               </p>
               <p
-                className={`mt-0.5 font-bold tabular-nums ${(k as any).truncate ? "truncate text-sm" : "text-xl"}`}
+                className={`mt-0.5 font-bold tabular-nums ${k.truncate ? "truncate text-sm" : "text-xl"}`}
                 style={{ color: "#c8daff" }}
-                title={(k as any).truncate ? String(k.value) : undefined}
+                title={k.truncate ? String(k.value) : undefined}
               >
                 {k.value}
               </p>
