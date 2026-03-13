@@ -7,12 +7,38 @@
 //                           or a full URL (https://192.168.1.10:9200) in production.
 //    VITE_WAZUH_USER      – OpenSearch username  (default: admin)
 //    VITE_WAZUH_PASSWORD  – OpenSearch password
+//
+//  Optional:
+//    VITE_WAZUH_TIMEOUT_MS – request timeout in ms (default: 12000)
+//    VITE_WAZUH_ALERTS_SIZE – default alert list size (default: 500)
 
 const BASE_URL = (import.meta.env.VITE_WAZUH_URL as string) ?? "/api/os";
 const USER     = (import.meta.env.VITE_WAZUH_USER as string) ?? "admin";
 const PASS     = (import.meta.env.VITE_WAZUH_PASSWORD as string) ?? "admin";
 
 const SEARCH_URL = `${BASE_URL}/wazuh-alerts-*/_search`;
+
+const DEFAULT_TIMEOUT_MS = Number(import.meta.env.VITE_WAZUH_TIMEOUT_MS ?? 12_000);
+const DEFAULT_ALERTS_SIZE = Number(import.meta.env.VITE_WAZUH_ALERTS_SIZE ?? 500);
+
+const ALERT_SOURCE_FIELDS = [
+  "@timestamp",
+  "rule.level",
+  "rule.id",
+  "rule.description",
+  "rule.mitre.id",
+  "rule.mitre.tactic",
+  "rule.mitre.technique",
+  "rule.groups",
+  "data.srcip",
+  "data.src_ip",
+  "data.dstip",
+  "data.dest_ip",
+  "data.destip",
+  "data.protocol",
+  "agent.name",
+  "agent.ip",
+];
 
 // ── Exported types ────────────────────────────────────────────────────────────
 
@@ -81,19 +107,34 @@ function authHeader(): string {
   return "Basic " + btoa(`${USER}:${PASS}`);
 }
 
-async function esPost(body: object): Promise<any> {
-  const res = await fetch(SEARCH_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: authHeader(),
-    },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    throw new Error(`OpenSearch ${res.status}: ${res.statusText}`);
+async function esPost(body: object, opts?: { timeoutMs?: number }): Promise<any> {
+  const controller = new AbortController();
+  const timeoutMs = opts?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const res = await fetch(SEARCH_URL, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader(),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!res.ok) {
+      throw new Error(`OpenSearch ${res.status}: ${res.statusText}`);
+    }
+    return res.json();
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error(`Timeout kết nối OpenSearch (${timeoutMs}ms)`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 function fmtDateTime(iso: string): string {
@@ -152,11 +193,14 @@ function parseHit(hit: any): WazuhAlertDisplay {
 // ── Public API functions ──────────────────────────────────────────────────────
 
 /** All Wazuh alerts from the last 24 hours, sorted newest-first. */
-export async function getRecentAlerts(): Promise<WazuhAlertDisplay[]> {
+export async function getRecentAlerts(params?: { size?: number }): Promise<WazuhAlertDisplay[]> {
+  const size = params?.size ?? DEFAULT_ALERTS_SIZE;
+
   const data = await esPost({
-    size: 10000,
+    size,
     sort: [{ "@timestamp": { order: "desc" } }],
     query: { range: { "@timestamp": { gte: "now-24h" } } },
+    _source: ALERT_SOURCE_FIELDS,
   });
   return (data.hits?.hits ?? []).map(parseHit);
 }
@@ -194,9 +238,12 @@ export async function getTopAttackers(): Promise<TopAttacker[]> {
 }
 
 /** MITRE ATT&CK technique counts from all alerts in the last 24h. */
-export async function getMitreTechniques(): Promise<MitreEntry[]> {
+export async function getMitreTechniques(params?: { tacticSize?: number; techniqueSize?: number }): Promise<MitreEntry[]> {
+  const tacticSize = params?.tacticSize ?? 30;
+  const techniqueSize = params?.techniqueSize ?? 80;
+
   const data = await esPost({
-    size: 10000,
+    size: 0,
     query: {
       bool: {
         must: [
@@ -205,27 +252,28 @@ export async function getMitreTechniques(): Promise<MitreEntry[]> {
         ],
       },
     },
-    _source: ["rule.mitre"],
+    aggs: {
+      by_tactic: {
+        terms: {
+          field: "rule.mitre.tactic",
+          size: tacticSize,
+          missing: "Không phân loại",
+        },
+        aggs: {
+          by_technique: {
+            terms: { field: "rule.mitre.id", size: techniqueSize },
+          },
+        },
+      },
+    },
   });
 
-  const tacticMap = new Map<string, Map<string, number>>();
-
-  for (const hit of data.hits?.hits ?? []) {
-    const mit  = hit._source?.rule?.mitre ?? {};
-    const ids: string[]    = toArr<string>(mit.id);
-    const tactics: string[] = toArr<string>(mit.tactic);
-    const tactic = tactics[0] ?? "Không phân loại";
-
-    if (!tacticMap.has(tactic)) tacticMap.set(tactic, new Map());
-    const tm = tacticMap.get(tactic)!;
-    for (const id of ids) tm.set(id, (tm.get(id) ?? 0) + 1);
-  }
-
-  return Array.from(tacticMap.entries()).map(([tactic, techniques]) => ({
-    tactic,
-    techniques: Array.from(techniques.entries())
-      .map(([id, count]) => ({ id, name: id, count }))
-      .sort((a, b) => b.count - a.count),
+  const buckets = data.aggregations?.by_tactic?.buckets ?? [];
+  return buckets.map((b: any) => ({
+    tactic: String(b.key ?? "Không phân loại"),
+    techniques: (b.by_technique?.buckets ?? [])
+      .map((x: any) => ({ id: String(x.key), name: String(x.key), count: Number(x.doc_count ?? 0) }))
+      .sort((a: any, c: any) => c.count - a.count),
   }));
 }
 
@@ -303,9 +351,11 @@ export async function getKpiData(): Promise<KpiData> {
 }
 
 /** All Suricata IDS alerts from the last 24 hours (rule.groups = suricata). */
-export async function getSuricataAlerts(): Promise<WazuhAlertDisplay[]> {
+export async function getSuricataAlerts(params?: { size?: number }): Promise<WazuhAlertDisplay[]> {
+  const size = params?.size ?? DEFAULT_ALERTS_SIZE;
+
   const data = await esPost({
-    size: 10000,
+    size,
     sort: [{ "@timestamp": { order: "desc" } }],
     query: {
       bool: {
@@ -315,6 +365,7 @@ export async function getSuricataAlerts(): Promise<WazuhAlertDisplay[]> {
         ],
       },
     },
+    _source: ALERT_SOURCE_FIELDS,
   });
   return (data.hits?.hits ?? []).map(parseHit);
 }
@@ -376,9 +427,13 @@ export async function getGeoData(): Promise<GeoPoint[]> {
 }
 
 /** Active Response events (firewall-drop / host-deny / active-response), 24h. */
-export async function getActiveResponses(): Promise<WazuhAlertDisplay[]> {
+export async function getActiveResponses(params?: { size?: number; from?: number }): Promise<WazuhAlertDisplay[]> {
+  const size = params?.size ?? 500;
+  const from = params?.from ?? 0;
+
   const data = await esPost({
-    size: 10000,
+    size,
+    from,
     sort: [{ "@timestamp": { order: "desc" } }],
     query: {
       bool: {
@@ -393,6 +448,7 @@ export async function getActiveResponses(): Promise<WazuhAlertDisplay[]> {
         minimum_should_match: 1,
       },
     },
+    _source: ALERT_SOURCE_FIELDS,
   });
   return (data.hits?.hits ?? []).map(parseHit);
 }
@@ -401,10 +457,11 @@ export async function getActiveResponses(): Promise<WazuhAlertDisplay[]> {
  * Threat intelligence – high-severity source IPs (level >= 8) aggregated
  * with MITRE context, sorted by threat level then hit count.
  */
-export async function getThreatIntel(): Promise<ThreatIntelEntry[]> {
+export async function getThreatIntel(params?: { size?: number }): Promise<ThreatIntelEntry[]> {
+  const size = params?.size ?? 200;
+
   const data = await esPost({
-    size: 10000,
-    sort: [{ "@timestamp": { order: "desc" } }],
+    size: 0,
     query: {
       bool: {
         must: [
@@ -414,53 +471,46 @@ export async function getThreatIntel(): Promise<ThreatIntelEntry[]> {
         ],
       },
     },
-    _source: ["data.srcip", "rule.level", "rule.description", "rule.mitre", "@timestamp"],
+    aggs: {
+      by_ip: {
+        terms: {
+          field: "data.srcip",
+          size,
+          order: { max_level: "desc" },
+        },
+        aggs: {
+          max_level: { max: { field: "rule.level" } },
+          last_seen: { max: { field: "@timestamp" } },
+          mitre_ids: { terms: { field: "rule.mitre.id", size: 20 } },
+          mitre_tactics: { terms: { field: "rule.mitre.tactic", size: 20 } },
+          top_hit: {
+            top_hits: {
+              size: 1,
+              sort: [
+                { "rule.level": { order: "desc" } },
+                { "@timestamp": { order: "desc" } },
+              ],
+              _source: ["rule.description"],
+            },
+          },
+        },
+      },
+    },
   });
 
-  const ipMap = new Map<string, {
-    hits: number;
-    maxLevel: number;
-    topRule: string;
-    mitreIds: Set<string>;
-    mitreTactics: Set<string>;
-    lastSeen: string;
-  }>();
-
-  for (const hit of data.hits?.hits ?? []) {
-    const s  = hit._source ?? {};
-    const ip = s.data?.srcip;
-    if (!ip) continue;
-
-    const level  = Number(s.rule?.level ?? 0);
-    const desc   = String(s.rule?.description ?? "");
-    const mIds   = toArr<string>(s.rule?.mitre?.id);
-    const mTacts = toArr<string>(s.rule?.mitre?.tactic);
-    const ts     = String(s["@timestamp"] ?? "");
-
-    const existing = ipMap.get(ip);
-    if (existing) {
-      existing.hits++;
-      if (level > existing.maxLevel) { existing.maxLevel = level; existing.topRule = desc; }
-      mIds.forEach((id) => existing.mitreIds.add(id));
-      mTacts.forEach((t) => existing.mitreTactics.add(t));
-      if (ts > existing.lastSeen) existing.lastSeen = ts;
-    } else {
-      ipMap.set(ip, {
-        hits: 1, maxLevel: level, topRule: desc,
-        mitreIds: new Set(mIds), mitreTactics: new Set(mTacts), lastSeen: ts,
-      });
-    }
-  }
-
-  return Array.from(ipMap.entries())
-    .map(([ip, d]) => ({
-      ip,
-      hits:         d.hits,
-      maxLevel:     d.maxLevel,
-      topRule:      d.topRule,
-      mitreIds:     Array.from(d.mitreIds),
-      mitreTactics: Array.from(d.mitreTactics),
-      lastSeen:     fmtDateTime(d.lastSeen),
-    }))
-    .sort((a, b) => b.maxLevel - a.maxLevel || b.hits - a.hits);
+  const buckets = data.aggregations?.by_ip?.buckets ?? [];
+  return buckets
+    .map((b: any) => {
+      const top = b.top_hit?.hits?.hits?.[0]?._source;
+      return {
+        ip:           String(b.key ?? ""),
+        hits:         Number(b.doc_count ?? 0),
+        maxLevel:     Number(b.max_level?.value ?? 0),
+        topRule:      String(top?.rule?.description ?? ""),
+        mitreIds:     (b.mitre_ids?.buckets ?? []).map((x: any) => String(x.key)),
+        mitreTactics: (b.mitre_tactics?.buckets ?? []).map((x: any) => String(x.key)),
+        lastSeen:     fmtDateTime(String(b.last_seen?.value_as_string ?? "")),
+      };
+    })
+    .sort((a: ThreatIntelEntry, b: ThreatIntelEntry) => b.maxLevel - a.maxLevel || b.hits - a.hits);
 }

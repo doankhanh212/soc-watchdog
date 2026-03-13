@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
 import { Globe, AlertTriangle, Shield, TrendingUp } from "lucide-react";
+import PaginationBar from "@/components/PaginationBar";
 import { useWazuhData } from "@/hooks/useWazuhData";
 import type { ThreatIntelEntry } from "@/services/wazuhApi";
 
@@ -13,12 +15,25 @@ const levelBadge = (lv: number) => {
 };
 
 const ThreatIntelligence = () => {
-  const { threatIntel, loading, error } = useWazuhData();
+  const { threatIntel, loading, error } = useWazuhData({ needs: { threatIntel: true }, pollMs: 60_000 });
 
   const critical = threatIntel.filter((t) => t.maxLevel >= 14).length;
   const high     = threatIntel.filter((t) => t.maxLevel >= 10 && t.maxLevel < 14).length;
   const medium   = threatIntel.filter((t) => t.maxLevel >= 8 && t.maxLevel < 10).length;
   const totalHits = threatIntel.reduce((sum, t) => sum + t.hits, 0);
+
+  const pageSize = 20;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(threatIntel.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [threatIntel.length]);
+
+  const viewIntel = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return threatIntel.slice(start, start + pageSize);
+  }, [page, threatIntel]);
 
   return (
     <div className="space-y-4">
@@ -99,7 +114,7 @@ const ThreatIntelligence = () => {
                   </td>
                 </tr>
               ) : (
-                threatIntel.map((t) => (
+                viewIntel.map((t) => (
                   <tr key={t.ip}>
                     <td className="text-accent font-semibold">{t.ip}</td>
                     <td>
@@ -123,6 +138,11 @@ const ThreatIntelligence = () => {
             </tbody>
           </table>
         </div>
+        {!loading && (
+          <div className="pt-3">
+            <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        )}
       </div>
     </div>
   );

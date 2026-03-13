@@ -2,7 +2,7 @@ import AttackTimeline from "@/components/soc/AttackTimeline";
 import { useWazuhData } from "@/hooks/useWazuhData";
 
 const TimelinePage = () => {
-  const { timeline, loading, error } = useWazuhData();
+  const { timeline, loading, error } = useWazuhData({ needs: { timeline: true }, pollMs: 30_000 });
 
   return (
     <div className="space-y-4">

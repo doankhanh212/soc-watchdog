@@ -26,5 +26,20 @@ export default defineConfig(({ mode }) => {
     resolve: {
       alias: { "@": path.resolve(__dirname, "./src") },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes("node_modules")) return;
+            if (id.includes("recharts") || id.includes("chart.js") || id.includes("react-chartjs-2")) return "charts";
+            if (id.includes("@radix-ui")) return "radix";
+            if (id.includes("@tanstack")) return "tanstack";
+            if (id.includes("react-router-dom")) return "router";
+            if (id.includes("lucide-react")) return "icons";
+            return "vendor";
+          },
+        },
+      },
+    },
   };
 });

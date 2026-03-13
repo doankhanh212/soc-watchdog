@@ -1,83 +1,167 @@
 import { Globe } from "lucide-react";
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell, LabelList,
 } from "recharts";
+import lookup from "country-code-lookup";
 import type { GeoPoint } from "@/services/wazuhApi";
+import { useMemo } from "react";
+import "flag-icons/css/flag-icons.min.css";
 
 interface Props {
   geoData: GeoPoint[];
   loading?: boolean;
 }
 
-const BAR_COLORS = [
-  "hsl(0, 72%, 51%)",    // danger red – top attacker
-  "hsl(38, 92%, 50%)",   // warning amber
-  "hsl(52, 100%, 50%)",  // primary yellow
-  "hsl(190, 90%, 50%)",  // accent cyan
-];
-const pickColor = (i: number) => BAR_COLORS[Math.min(i, BAR_COLORS.length - 1)];
+const TOP_COUNT = 10;
 
-const CustomTooltip = ({ active, payload }: any) => {
-  if (!active || !payload?.length) return null;
-  const d = payload[0].payload as GeoPoint;
+// Gradient definitions for SVG
+const Gradients = () => (
+  <defs>
+    <linearGradient id="colorHighRisk" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stopColor="#facc15" /> {/* Yellow-400 */}
+      <stop offset="100%" stopColor="#ef4444" /> {/* Red-500 */}
+    </linearGradient>
+  </defs>
+);
+
+const CustomYAxisTick = ({ x, y, payload }: any) => {
+  const countryName = payload.value;
+  let isoCode = "un"; // default unknown
+  
+  // Attempt to find ISO code
+  if (countryName !== "Others") {
+    const found = lookup.byCountry(countryName);
+    if (found) isoCode = found.iso2.toLowerCase();
+    // Fallback for common mismatches if needed (e.g. "United States" -> "us" is standard)
+    if (!found && countryName === "Russia") isoCode = "ru";
+    if (!found && countryName === "South Korea") isoCode = "kr";
+    if (!found && countryName === "Vietnam") isoCode = "vn";
+    if (!found && countryName === "Iran") isoCode = "ir";
+    if (!found && countryName === "Taiwan") isoCode = "tw";
+    if (!found && countryName === "United Kingdom") isoCode = "gb";
+  }
+
   return (
-    <div className="bg-card border border-border rounded px-3 py-2 text-xs font-mono shadow-lg">
-      <p className="text-foreground font-semibold">{d.country}</p>
-      <p className="text-primary mt-0.5">{d.hits.toLocaleString()} lượt tấn công</p>
+    <g transform={`translate(${x},${y})`}>
+      <foreignObject x={-140} y={-10} width={135} height={20}>
+        <div className="flex items-center justify-end w-full h-full gap-2 pr-2">
+          <span className="text-xs font-mono text-muted-foreground truncate max-w-[90px] text-right" title={countryName}>
+            {countryName}
+          </span>
+          {countryName !== "Others" && (
+            <span className={`fi fi-${isoCode} rounded-sm shadow-sm`} style={{ width: '16px', height: '12px' }} />
+          )}
+        </div>
+      </foreignObject>
+    </g>
+  );
+};
+
+const CustomTooltip = ({ active, payload, totalHits }: any) => {
+  if (!active || !payload?.length) return null;
+  const d = payload[0].payload;
+  const percent = totalHits > 0 ? ((d.hits / totalHits) * 100).toFixed(1) : "0";
+
+  return (
+    <div className="bg-popover border border-border rounded px-3 py-2 text-xs font-mono shadow-xl z-50">
+      <div className="flex items-center gap-2 mb-1">
+        <span className="font-bold text-foreground">{d.country}</span>
+        <span className="text-muted-foreground text-xs">({percent}%)</span>
+      </div>
+      <p className="text-primary font-semibold">{d.hits.toLocaleString()} <span className="text-muted-foreground font-normal">attacks</span></p>
     </div>
   );
 };
 
-const GeoAttackMap = ({ geoData, loading }: Props) => (
-  <div className="soc-card">
-    <h2 className="text-sm font-mono font-semibold text-primary uppercase tracking-wider mb-3 flex items-center gap-2">
-      <Globe className="h-4 w-4" />
-      Bản đồ tấn công địa lý (24 giờ qua)
-    </h2>
+const GeoAttackMap = ({ geoData, loading }: Props) => {
+  // Process Data: Sort, Top 10 + Others
+  const { processedData, totalHits } = useMemo(() => {
+    if (!geoData.length) return { processedData: [], totalHits: 0 };
 
-    <div className="h-[260px]">
-      {loading ? (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-xs font-mono text-muted-foreground animate-pulse">Đang tải dữ liệu…</p>
-        </div>
-      ) : geoData.length === 0 ? (
-        <div className="flex items-center justify-center h-full">
-          <p className="text-xs font-mono text-muted-foreground">
-            Không có dữ liệu GeoLocation – bật enrichment trong Wazuh pipeline
-          </p>
-        </div>
-      ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            layout="vertical"
-            data={geoData}
-            margin={{ top: 4, right: 40, left: 8, bottom: 4 }}
-          >
-            <XAxis
-              type="number"
-              tick={{ fill: "hsl(215, 15%, 50%)", fontFamily: "JetBrains Mono", fontSize: 10 }}
-              axisLine={{ stroke: "hsl(225, 30%, 18%)" }}
-              tickLine={false}
-            />
-            <YAxis
-              dataKey="country"
-              type="category"
-              width={110}
-              tick={{ fill: "hsl(215, 15%, 65%)", fontFamily: "JetBrains Mono", fontSize: 10 }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <Tooltip content={<CustomTooltip />} cursor={{ fill: "hsla(225, 30%, 18%, 0.4)" }} />
-            <Bar dataKey="hits" radius={[0, 3, 3, 0]}>
-              {geoData.map((_, i) => (
-                <Cell key={i} fill={pickColor(i)} />
-              ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
-      )}
+    const sorted = [...geoData].sort((a, b) => b.hits - a.hits);
+    const total = sorted.reduce((sum, item) => sum + item.hits, 0);
+
+    let finalData = sorted;
+    if (sorted.length > TOP_COUNT) {
+      const top = sorted.slice(0, TOP_COUNT);
+      const others = sorted.slice(TOP_COUNT).reduce((sum, item) => sum + item.hits, 0);
+      finalData = [...top, { country: "Others", hits: others }];
+    }
+
+    return { processedData: finalData, totalHits: total };
+  }, [geoData]);
+
+  return (
+    <div className="soc-card h-full flex flex-col">
+      <h2 className="text-sm font-mono font-semibold text-primary uppercase tracking-wider mb-4 flex items-center gap-2">
+        <Globe className="h-4 w-4" />
+        Bản đồ tấn công địa lý (Top Origins)
+      </h2>
+
+      <div className="flex-1 min-h-[300px]">
+        {loading ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs font-mono text-muted-foreground animate-pulse">Đang tải dữ liệu…</p>
+          </div>
+        ) : processedData.length === 0 ? (
+          <div className="flex items-center justify-center h-full">
+            <p className="text-xs font-mono text-muted-foreground">
+              Không có dữ liệu GeoLocation
+            </p>
+          </div>
+        ) : (
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart
+              layout="vertical"
+              data={processedData}
+              margin={{ top: 5, right: 40, left: 10, bottom: 5 }}
+              barCategoryGap={4} // Slim bars
+            >
+              <Gradients />
+              <XAxis type="number" hide />
+              <YAxis
+                dataKey="country"
+                type="category"
+                width={140}
+                tick={<CustomYAxisTick />}
+                axisLine={false}
+                tickLine={false}
+              />
+              <Tooltip
+                content={<CustomTooltip totalHits={totalHits} />}
+                cursor={{ fill: "hsl(var(--accent) / 0.1)", radius: 4 }}
+              />
+              <Bar dataKey="hits" radius={[0, 4, 4, 0]} barSize={14}>
+                {processedData.map((entry, index) => {
+                  // Top 3 get gradient, others get solid
+                  const isTop3 = index < 3 && entry.country !== "Others";
+                  return (
+                    <Cell
+                      key={`cell-${index}`}
+                      fill={isTop3 ? "url(#colorHighRisk)" : "hsl(var(--secondary))"}
+                      stroke={isTop3 ? "none" : "hsl(var(--border))"}
+                      strokeWidth={1}
+                    />
+                  );
+                })}
+                <LabelList
+                  dataKey="hits"
+                  position="right"
+                  formatter={(val: number) => val.toLocaleString()}
+                  style={{
+                    fill: "hsl(var(--foreground))",
+                    fontSize: "12px",
+                    fontFamily: "JetBrains Mono",
+                    opacity: 0.8,
+                  }}
+                />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default GeoAttackMap;

@@ -1,3 +1,5 @@
+import { useEffect, useMemo, useState } from "react";
+import PaginationBar from "@/components/PaginationBar";
 import type { WazuhAlertDisplay } from "@/services/wazuhApi";
 
 const toSev = (level: number): 1 | 2 | 3 =>
@@ -28,17 +30,32 @@ const LoadingRows = () => (
 interface Props {
   alerts:   WazuhAlertDisplay[];
   loading?: boolean;
+  paginate?: boolean;
+  pageSize?: number;
 }
 
-const SuricataAlerts = ({ alerts, loading }: Props) => {
-  const netAlerts = alerts.filter((a) => a.srcIp !== "");
+const SuricataAlerts = ({ alerts, loading, paginate = false, pageSize = 20 }: Props) => {
+  const netAlerts = useMemo(() => alerts.filter((a) => a.srcIp !== ""), [alerts]);
+
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(netAlerts.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [netAlerts.length, pageSize]);
+
+  const viewAlerts = useMemo(() => {
+    if (!paginate) return netAlerts;
+    const start = (page - 1) * pageSize;
+    return netAlerts.slice(start, start + pageSize);
+  }, [netAlerts, page, pageSize, paginate]);
 
   return (
     <div className="soc-card">
       <h2 className="text-sm font-mono font-semibold text-primary uppercase tracking-wider mb-3">
         Cảnh báo mạng / IDS
       </h2>
-      <div className="overflow-auto max-h-[320px]">
+      <div className={paginate ? "overflow-auto" : "overflow-auto max-h-[320px]"}>
         <table className="soc-table">
           <thead>
             <tr>
@@ -60,7 +77,7 @@ const SuricataAlerts = ({ alerts, loading }: Props) => {
                 </td>
               </tr>
             ) : (
-              netAlerts.map((a) => (
+              viewAlerts.map((a) => (
                 <tr key={a.id}>
                   <td className="text-muted-foreground whitespace-nowrap">{a.timestamp.split(" ")[1]}</td>
                   <td>{severityBadge(toSev(a.level))}</td>
@@ -74,6 +91,12 @@ const SuricataAlerts = ({ alerts, loading }: Props) => {
           </tbody>
         </table>
       </div>
+
+      {paginate && !loading && (
+        <div className="pt-3">
+          <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+        </div>
+      )}
     </div>
   );
 };

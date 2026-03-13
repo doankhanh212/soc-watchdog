@@ -2,7 +2,7 @@ import SuricataAlerts from "@/components/soc/SuricataAlerts";
 import { useWazuhData } from "@/hooks/useWazuhData";
 
 const SuricataPage = () => {
-  const { suricataAlerts, loading, error } = useWazuhData();
+  const { suricataAlerts, loading, error } = useWazuhData({ needs: { suricataAlerts: true }, limits: { suricataAlerts: 1000 }, pollMs: 30_000 });
 
   return (
     <div className="space-y-4">
@@ -11,7 +11,7 @@ const SuricataPage = () => {
           <span className="font-bold">Lỗi:</span> {error}
         </div>
       )}
-      <SuricataAlerts alerts={suricataAlerts} loading={loading} />
+      <SuricataAlerts alerts={suricataAlerts} loading={loading} paginate pageSize={20} />
     </div>
   );
 };

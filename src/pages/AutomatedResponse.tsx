@@ -1,4 +1,6 @@
+import { useEffect, useMemo, useState } from "react";
 import { Zap, ShieldCheck, ShieldAlert, ShieldOff } from "lucide-react";
+import PaginationBar from "@/components/PaginationBar";
 import { useWazuhData } from "@/hooks/useWazuhData";
 import type { WazuhAlertDisplay } from "@/services/wazuhApi";
 
@@ -17,11 +19,24 @@ function statusFromLevel(level: number) {
 }
 
 const AutomatedResponse = () => {
-  const { activeResponses, loading, error } = useWazuhData();
+  const { activeResponses, loading, error } = useWazuhData({ needs: { activeResponses: true }, pollMs: 60_000 });
 
   const criticalCount = activeResponses.filter((a) => a.level >= 12).length;
   const highCount     = activeResponses.filter((a) => a.level >= 8 && a.level < 12).length;
   const normalCount   = activeResponses.filter((a) => a.level < 8).length;
+
+  const pageSize = 25;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(activeResponses.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [activeResponses.length]);
+
+  const viewResponses = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return activeResponses.slice(start, start + pageSize);
+  }, [activeResponses, page]);
 
   return (
     <div className="space-y-4">
@@ -101,7 +116,7 @@ const AutomatedResponse = () => {
                   </td>
                 </tr>
               ) : (
-                activeResponses.map((a) => {
+                viewResponses.map((a) => {
                   const st = statusFromLevel(a.level);
                   return (
                     <tr key={a.id}>
@@ -124,6 +139,11 @@ const AutomatedResponse = () => {
             </tbody>
           </table>
         </div>
+        {!loading && (
+          <div className="pt-3">
+            <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        )}
       </div>
     </div>
   );

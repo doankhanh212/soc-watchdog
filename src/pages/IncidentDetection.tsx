@@ -1,4 +1,6 @@
 import { AlertTriangle, Clock, CheckCircle, XCircle } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import PaginationBar from "@/components/PaginationBar";
 import { useWazuhData } from "@/hooks/useWazuhData";
 import type { WazuhAlertDisplay } from "@/services/wazuhApi";
 
@@ -52,8 +54,38 @@ function buildIncidents(alerts: WazuhAlertDisplay[]) {
 }
 
 const IncidentDetection = () => {
-  const { alerts, loading, error } = useWazuhData();
-  const incidents = buildIncidents(alerts);
+  const { alerts, loading, error } = useWazuhData({
+    needs: { alerts: true },
+    limits: { alerts: 1000 },
+    pollMs: 30_000,
+  });
+
+  const incidents = useMemo(() => buildIncidents(alerts), [alerts]);
+
+  const stats = useMemo(() => {
+    let open = 0;
+    let investigating = 0;
+    let done = 0;
+    for (const i of incidents) {
+      if (i.status === "Đang mở") open++;
+      else if (i.status === "Đang điều tra") investigating++;
+      else done++;
+    }
+    return { open, investigating, done };
+  }, [incidents]);
+
+  const pageSize = 50;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(incidents.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [incidents.length]);
+
+  const viewIncidents = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return incidents.slice(start, start + pageSize);
+  }, [incidents, page]);
 
   return (
     <div className="space-y-4">
@@ -63,7 +95,7 @@ const IncidentDetection = () => {
           Phát hiện sự cố &amp; Phân loại – 24 giờ qua
         </h2>
         <span className="text-xs font-mono text-muted-foreground">
-          {loading ? "…" : `${incidents.length} sự cố`}
+          {loading ? "…" : `${incidents.length} sự cố (tối đa 1.000)`}
         </span>
       </div>
 
@@ -77,19 +109,19 @@ const IncidentDetection = () => {
         <div className="soc-card soc-glow-danger">
           <p className="text-xs font-mono text-muted-foreground uppercase">Đang mở</p>
           <p className="text-2xl font-bold font-mono text-danger">
-            {loading ? "…" : incidents.filter((i) => i.status === "Đang mở").length}
+            {loading ? "…" : stats.open}
           </p>
         </div>
         <div className="soc-card soc-glow-primary">
           <p className="text-xs font-mono text-muted-foreground uppercase">Đang điều tra</p>
           <p className="text-2xl font-bold font-mono text-warning">
-            {loading ? "…" : incidents.filter((i) => i.status === "Đang điều tra").length}
+            {loading ? "…" : stats.investigating}
           </p>
         </div>
         <div className="soc-card soc-glow-accent">
           <p className="text-xs font-mono text-muted-foreground uppercase">Đã xử lý</p>
           <p className="text-2xl font-bold font-mono text-success">
-            {loading ? "…" : incidents.filter((i) => i.status === "Đã xử lý").length}
+            {loading ? "…" : stats.done}
           </p>
         </div>
       </div>
@@ -125,7 +157,7 @@ const IncidentDetection = () => {
                   </td>
                 </tr>
               ) : (
-                incidents.map((inc) => {
+                viewIncidents.map((inc) => {
                   const Icon = statusIcon[inc.status];
                   return (
                     <tr key={inc.id}>
@@ -149,6 +181,11 @@ const IncidentDetection = () => {
             </tbody>
           </table>
         </div>
+        {!loading && incidents.length > 0 && (
+          <div className="pt-3">
+            <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        )}
       </div>
     </div>
   );

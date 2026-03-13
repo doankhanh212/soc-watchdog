@@ -2,7 +2,7 @@ import WazuhAlerts from "@/components/soc/WazuhAlerts";
 import { useWazuhData } from "@/hooks/useWazuhData";
 
 const WazuhPage = () => {
-  const { alerts, loading, error } = useWazuhData();
+  const { alerts, loading, error } = useWazuhData({ needs: { alerts: true }, limits: { alerts: 1000 }, pollMs: 30_000 });
 
   return (
     <div className="space-y-4">
@@ -11,7 +11,7 @@ const WazuhPage = () => {
           <span className="font-bold">Lỗi:</span> {error}
         </div>
       )}
-      <WazuhAlerts alerts={alerts} loading={loading} />
+      <WazuhAlerts alerts={alerts} loading={loading} paginate pageSize={20} />
     </div>
   );
 };

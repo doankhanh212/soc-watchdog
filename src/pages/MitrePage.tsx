@@ -2,7 +2,7 @@ import MitreHeatmap from "@/components/soc/MitreHeatmap";
 import { useWazuhData } from "@/hooks/useWazuhData";
 
 const MitrePage = () => {
-  const { mitreData, loading, error } = useWazuhData();
+  const { mitreData, loading, error } = useWazuhData({ needs: { mitreData: true }, pollMs: false });
 
   return (
     <div className="space-y-4">

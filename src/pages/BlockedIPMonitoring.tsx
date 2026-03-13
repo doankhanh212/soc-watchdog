@@ -2,7 +2,7 @@ import BlockedIPList from "@/components/soc/BlockedIPList";
 import { useWazuhData } from "@/hooks/useWazuhData";
 
 const BlockedIPMonitoring = () => {
-  const { blockedIPs, loading, error } = useWazuhData();
+  const { blockedIPs, loading, error } = useWazuhData({ needs: { blockedIPs: true }, pollMs: 30_000 });
 
   return (
     <div className="space-y-4">

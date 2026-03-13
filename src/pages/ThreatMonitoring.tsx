@@ -1,4 +1,6 @@
 import { Search, AlertTriangle, Eye, TrendingUp } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import PaginationBar from "@/components/PaginationBar";
 import { useWazuhData } from "@/hooks/useWazuhData";
 import type { WazuhAlertDisplay } from "@/services/wazuhApi";
 
@@ -23,8 +25,38 @@ function buildThreats(alerts: WazuhAlertDisplay[]) {
 }
 
 const ThreatMonitoring = () => {
-  const { alerts, loading, error } = useWazuhData();
-  const threats = buildThreats(alerts);
+  const { alerts, loading, error } = useWazuhData({
+    needs: { alerts: true },
+    limits: { alerts: 1000 },
+    pollMs: 10_000,
+  });
+
+  const threats = useMemo(() => buildThreats(alerts), [alerts]);
+
+  const stats = useMemo(() => {
+    let critical = 0;
+    let high = 0;
+    let medium = 0;
+    for (const t of threats) {
+      if (t.severity === "Nghiêm trọng") critical++;
+      else if (t.severity === "Cao") high++;
+      else if (t.severity === "Trung bình") medium++;
+    }
+    return { critical, high, medium };
+  }, [threats]);
+
+  const pageSize = 50;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(threats.length / pageSize));
+
+  useEffect(() => {
+    setPage(1);
+  }, [threats.length]);
+
+  const viewThreats = useMemo(() => {
+    const start = (page - 1) * pageSize;
+    return threats.slice(start, start + pageSize);
+  }, [page, threats]);
 
   return (
     <div className="space-y-4">
@@ -36,7 +68,7 @@ const ThreatMonitoring = () => {
         <div className="flex items-center gap-2 bg-secondary/50 rounded px-3 py-1.5">
           <Search className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-xs font-mono text-muted-foreground">
-            {loading ? "…" : `${threats.length} mối đe dọa được phát hiện`}
+            {loading ? "…" : `${threats.length} mối đe dọa được phát hiện (tối đa 1.000)`}
           </span>
         </div>
       </div>
@@ -54,7 +86,7 @@ const ThreatMonitoring = () => {
             <span className="text-xs font-mono text-muted-foreground uppercase">Nghiêm trọng</span>
           </div>
           <p className="text-2xl font-bold font-mono text-danger">
-            {loading ? "…" : threats.filter((t) => t.severity === "Nghiêm trọng").length}
+            {loading ? "…" : stats.critical}
           </p>
         </div>
         <div className="soc-card soc-glow-primary">
@@ -63,7 +95,7 @@ const ThreatMonitoring = () => {
             <span className="text-xs font-mono text-muted-foreground uppercase">Cao</span>
           </div>
           <p className="text-2xl font-bold font-mono text-warning">
-            {loading ? "…" : threats.filter((t) => t.severity === "Cao").length}
+            {loading ? "…" : stats.high}
           </p>
         </div>
         <div className="soc-card soc-glow-accent">
@@ -72,7 +104,7 @@ const ThreatMonitoring = () => {
             <span className="text-xs font-mono text-muted-foreground uppercase">Trung bình</span>
           </div>
           <p className="text-2xl font-bold font-mono text-info">
-            {loading ? "…" : threats.filter((t) => t.severity === "Trung bình").length}
+            {loading ? "…" : stats.medium}
           </p>
         </div>
       </div>
@@ -98,8 +130,14 @@ const ThreatMonitoring = () => {
                     ))}
                   </tr>
                 ))
+              ) : threats.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="text-center text-muted-foreground py-4 text-xs font-mono">
+                    Không có dữ liệu trong 24 giờ qua
+                  </td>
+                </tr>
               ) : (
-                threats.map((t) => (
+                viewThreats.map((t) => (
                   <tr key={t.id}>
                     <td className="text-muted-foreground whitespace-nowrap">{t.time.split(" ")[1]}</td>
                     <td><span className="soc-badge bg-secondary text-foreground">{t.source}</span></td>
@@ -112,6 +150,11 @@ const ThreatMonitoring = () => {
             </tbody>
           </table>
         </div>
+        {!loading && threats.length > 0 && (
+          <div className="pt-3">
+            <PaginationBar page={page} totalPages={totalPages} onPageChange={setPage} />
+          </div>
+        )}
       </div>
     </div>
   );
