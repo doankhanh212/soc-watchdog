@@ -22,10 +22,10 @@ const AttackStatsPanel = ({ data, loading }: Props) => {
         <div className="mb-2 flex items-center gap-2 text-danger">
           <Sigma className="h-4 w-4" />
           <span className="text-[11px] font-mono uppercase tracking-[0.28em] text-danger/80">
-            Attack Statistics
+            Th\u1ed1ng k\u00ea t\u1ea5n c\u00f4ng
           </span>
         </div>
-        <h2 className="text-lg font-semibold text-foreground">24-hour attack pressure summary</h2>
+        <h2 className="text-lg font-semibold text-foreground">T\u1ed5ng h\u1ee3p \u00e1p l\u1ef1c t\u1ea5n c\u00f4ng trong 24 gi\u1edd</h2>
       </div>
 
       <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-1">
@@ -33,7 +33,7 @@ const AttackStatsPanel = ({ data, loading }: Props) => {
         <div className="rounded-2xl border border-primary/30 bg-primary/10 px-4 py-4">
           <div className="flex items-center gap-2 text-primary">
             <AlertTriangle className="h-4 w-4" />
-            <span className="text-[11px] font-mono uppercase tracking-[0.18em]">Total attacks</span>
+            <span className="text-[11px] font-mono uppercase tracking-[0.18em]">T\u1ed5ng t\u1ea5n c\u00f4ng</span>
           </div>
           <p className="mt-2 text-3xl font-semibold text-foreground">
             {loading ? "…" : (data?.totalAttacks ?? 0).toLocaleString()}
@@ -67,7 +67,7 @@ const AttackStatsPanel = ({ data, loading }: Props) => {
         <div className="rounded-2xl border border-border/70 bg-secondary/10 p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Globe2 className="h-4 w-4 text-info" />
-            Top attacking countries
+            Qu\u1ed1c gia t\u1ea5n c\u00f4ng nhi\u1ec1u nh\u1ea5t
           </div>
           <div className="space-y-2">
             {loading ? (
@@ -95,7 +95,7 @@ const AttackStatsPanel = ({ data, loading }: Props) => {
         <div className="rounded-2xl border border-border/70 bg-secondary/10 p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Network className="h-4 w-4 text-primary" />
-            Top attacking IPs
+            IP t\u1ea5n c\u00f4ng nhi\u1ec1u nh\u1ea5t
           </div>
           <div className="space-y-2">
             {loading ? (
@@ -123,7 +123,7 @@ const AttackStatsPanel = ({ data, loading }: Props) => {
         <div className="rounded-2xl border border-border/70 bg-secondary/10 p-4">
           <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-foreground">
             <Layers3 className="h-4 w-4 text-warning" />
-            Attack types
+            Lo\u1ea1i t\u1ea5n c\u00f4ng
           </div>
           <div className="space-y-2">
             {loading ? (

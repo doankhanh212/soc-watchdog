@@ -11,28 +11,28 @@ export interface AttackSeverityMeta {
 const SEVERITY_META: Record<AttackSeverityKey, AttackSeverityMeta> = {
   low: {
     key: "low",
-    label: "Low",
+    label: "Th\u1ea5p",
     color: "#38bdf8",
     glow: "rgba(56, 189, 248, 0.45)",
     badgeClass: "bg-info/20 text-info border border-info/30",
   },
   medium: {
     key: "medium",
-    label: "Medium",
+    label: "Trung b\u00ecnh",
     color: "#facc15",
     glow: "rgba(250, 204, 21, 0.45)",
     badgeClass: "bg-warning/20 text-warning border border-warning/30",
   },
   high: {
     key: "high",
-    label: "High",
+    label: "Cao",
     color: "#ef4444",
     glow: "rgba(239, 68, 68, 0.5)",
     badgeClass: "bg-danger/20 text-danger border border-danger/30",
   },
   critical: {
     key: "critical",
-    label: "Critical",
+    label: "Nghi\u00eam tr\u1ecdng",
     color: "#ff3b3b",
     glow: "rgba(255, 59, 59, 0.7)",
     badgeClass: "animate-pulse bg-danger/25 text-danger border border-danger/50 shadow-[0_0_14px_rgba(255,59,59,0.45)]",
