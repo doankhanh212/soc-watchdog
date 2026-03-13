@@ -18,6 +18,8 @@ const PASS     = (import.meta.env.VITE_WAZUH_PASSWORD as string) ?? "admin";
 
 const SEARCH_URL = `${BASE_URL}/wazuh-alerts-*/_search`;
 
+import { isPrivateIP, resolveGeoIPs, getCachedGeo } from "@/utils/geoip";
+
 const DEFAULT_TIMEOUT_MS = Number(import.meta.env.VITE_WAZUH_TIMEOUT_MS ?? 12_000);
 const DEFAULT_ALERTS_SIZE = Number(import.meta.env.VITE_WAZUH_ALERTS_SIZE ?? 500);
 
@@ -753,7 +755,7 @@ export async function getBlockedIPs(): Promise<TopAttacker[]> {
  *  Supports both legacy GeoLocation.country_name and newer geo.country fields.
  */
 export async function getGeoData(): Promise<GeoPoint[]> {
-  // Run two aggregations in parallel: one per geo field
+  // 1. Try native geo-enrichment fields first (fast path)
   const [legacyData, newData] = await Promise.all([
     esPost({
       size: 0,
@@ -766,7 +768,7 @@ export async function getGeoData(): Promise<GeoPoint[]> {
         },
       },
       aggs: { by_country: { terms: { field: "GeoLocation.country_name", size: 100 } } },
-    }),
+    }).catch(() => null),
     esPost({
       size: 0,
       query: {
@@ -778,17 +780,56 @@ export async function getGeoData(): Promise<GeoPoint[]> {
         },
       },
       aggs: { by_country: { terms: { field: "geo.country", size: 100 } } },
-    }),
+    }).catch(() => null),
   ]);
 
-  // Merge both result sets, summing counts for the same country
   const countryMap = new Map<string, number>();
   for (const b of [
-    ...(legacyData.aggregations?.by_country?.buckets ?? []),
-    ...(newData.aggregations?.by_country?.buckets ?? []),
+    ...(legacyData?.aggregations?.by_country?.buckets ?? []),
+    ...(newData?.aggregations?.by_country?.buckets ?? []),
   ]) {
     const key = String(b.key);
     if (key) countryMap.set(key, (countryMap.get(key) ?? 0) + Number(b.doc_count));
+  }
+
+  if (countryMap.size > 0) {
+    return [...countryMap.entries()]
+      .map(([country, hits]) => ({ country, hits }))
+      .sort((a, b) => b.hits - a.hits);
+  }
+
+  // 2. Fallback: aggregate by source IP, then resolve countries via GeoIP proxy
+  const [srcipRes, srcIpRes] = await Promise.all([
+    esPost({
+      size: 0,
+      query: { range: { "@timestamp": { gte: "now-24h" } } },
+      aggs: { by_ip: { terms: { field: "data.srcip", size: 80 } } },
+    }).catch(() => null),
+    esPost({
+      size: 0,
+      query: { range: { "@timestamp": { gte: "now-24h" } } },
+      aggs: { by_ip: { terms: { field: "data.src_ip", size: 80 } } },
+    }).catch(() => null),
+  ]);
+
+  const ipHits = new Map<string, number>();
+  for (const b of [
+    ...(srcipRes?.aggregations?.by_ip?.buckets ?? []),
+    ...(srcIpRes?.aggregations?.by_ip?.buckets ?? []),
+  ]) {
+    const ip = String(b.key);
+    if (ip && !isPrivateIP(ip))
+      ipHits.set(ip, (ipHits.get(ip) ?? 0) + Number(b.doc_count));
+  }
+
+  if (ipHits.size === 0) return [];
+
+  await resolveGeoIPs([...ipHits.keys()]);
+
+  for (const [ip, hits] of ipHits) {
+    const geo = getCachedGeo(ip);
+    if (geo?.country && geo.country !== "Unknown")
+      countryMap.set(geo.country, (countryMap.get(geo.country) ?? 0) + hits);
   }
 
   return [...countryMap.entries()]

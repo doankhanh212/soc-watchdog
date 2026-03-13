@@ -18,38 +18,44 @@ const TOP_COUNT = 10;
 const Gradients = () => (
   <defs>
     <linearGradient id="colorHighRisk" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0%" stopColor="#facc15" /> {/* Yellow-400 */}
-      <stop offset="100%" stopColor="#ef4444" /> {/* Red-500 */}
+      <stop offset="0%" stopColor="#facc15" />
+      <stop offset="100%" stopColor="#ef4444" />
     </linearGradient>
   </defs>
 );
 
 const CustomYAxisTick = ({ x, y, payload }: any) => {
   const countryName = payload.value;
-  let isoCode = "un"; // default unknown
-  
-  // Attempt to find ISO code
+  let isoCode = "un";
+
   if (countryName !== "Others") {
     const found = lookup.byCountry(countryName);
     if (found) isoCode = found.iso2.toLowerCase();
-    // Fallback for common mismatches if needed (e.g. "United States" -> "us" is standard)
     if (!found && countryName === "Russia") isoCode = "ru";
     if (!found && countryName === "South Korea") isoCode = "kr";
     if (!found && countryName === "Vietnam") isoCode = "vn";
     if (!found && countryName === "Iran") isoCode = "ir";
     if (!found && countryName === "Taiwan") isoCode = "tw";
     if (!found && countryName === "United Kingdom") isoCode = "gb";
+    if (!found && countryName === "China") isoCode = "cn";
+    if (!found && countryName === "United States") isoCode = "us";
   }
 
   return (
     <g transform={`translate(${x},${y})`}>
       <foreignObject x={-140} y={-10} width={135} height={20}>
         <div className="flex items-center justify-end w-full h-full gap-2 pr-2">
-          <span className="text-xs font-mono text-muted-foreground truncate max-w-[90px] text-right" title={countryName}>
+          <span
+            className="text-xs font-mono text-muted-foreground truncate max-w-[90px] text-right"
+            title={countryName}
+          >
             {countryName}
           </span>
           {countryName !== "Others" && (
-            <span className={`fi fi-${isoCode} rounded-sm shadow-sm`} style={{ width: '16px', height: '12px' }} />
+            <span
+              className={`fi fi-${isoCode} rounded-sm shadow-sm`}
+              style={{ width: "16px", height: "12px" }}
+            />
           )}
         </div>
       </foreignObject>
@@ -68,13 +74,15 @@ const CustomTooltip = ({ active, payload, totalHits }: any) => {
         <span className="font-bold text-foreground">{d.country}</span>
         <span className="text-muted-foreground text-xs">({percent}%)</span>
       </div>
-      <p className="text-primary font-semibold">{d.hits.toLocaleString()} <span className="text-muted-foreground font-normal">attacks</span></p>
+      <p className="text-primary font-semibold">
+        {d.hits.toLocaleString()}{" "}
+        <span className="text-muted-foreground font-normal">tấn công</span>
+      </p>
     </div>
   );
 };
 
 const GeoAttackMap = ({ geoData, loading }: Props) => {
-  // Process Data: Sort, Top 10 + Others
   const { processedData, totalHits } = useMemo(() => {
     if (!geoData.length) return { processedData: [], totalHits: 0 };
 
@@ -101,12 +109,17 @@ const GeoAttackMap = ({ geoData, loading }: Props) => {
       <div className="flex-1 min-h-[300px]">
         {loading ? (
           <div className="flex items-center justify-center h-full">
-            <p className="text-xs font-mono text-muted-foreground animate-pulse">Đang tải dữ liệu…</p>
+            <p className="text-xs font-mono text-muted-foreground animate-pulse">
+              Đang tải dữ liệu…
+            </p>
           </div>
         ) : processedData.length === 0 ? (
-          <div className="flex items-center justify-center h-full">
-            <p className="text-xs font-mono text-muted-foreground">
-              Không có dữ liệu GeoLocation
+          <div className="flex flex-col items-center justify-center h-full gap-2">
+            <Globe className="h-8 w-8 text-muted-foreground/30" />
+            <p className="text-xs font-mono text-muted-foreground text-center">
+              Chưa có dữ liệu địa lý.
+              <br />
+              Đang tra cứu IP nguồn tấn công…
             </p>
           </div>
         ) : (
@@ -115,7 +128,7 @@ const GeoAttackMap = ({ geoData, loading }: Props) => {
               layout="vertical"
               data={processedData}
               margin={{ top: 5, right: 40, left: 10, bottom: 5 }}
-              barCategoryGap={4} // Slim bars
+              barCategoryGap={4}
             >
               <Gradients />
               <XAxis type="number" hide />
@@ -133,7 +146,6 @@ const GeoAttackMap = ({ geoData, loading }: Props) => {
               />
               <Bar dataKey="hits" radius={[0, 4, 4, 0]} barSize={14}>
                 {processedData.map((entry, index) => {
-                  // Top 3 get gradient, others get solid
                   const isTop3 = index < 3 && entry.country !== "Others";
                   return (
                     <Cell

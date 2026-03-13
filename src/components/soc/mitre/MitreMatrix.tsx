@@ -58,7 +58,7 @@ const MitreMatrix = ({
           ))}
         </div>
       ) : (
-        <ScrollArea className="w-full whitespace-nowrap pb-2">
+        <ScrollArea className="w-full pb-2">
           <div className="flex min-w-max gap-4 pb-2">
             {tactics.map((tactic) => (
               <div
