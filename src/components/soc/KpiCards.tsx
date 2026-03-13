@@ -1,4 +1,4 @@
-import { AlertTriangle, Crosshair, ShieldBan, Bell } from "lucide-react";
+import { AlertTriangle, Crosshair, AlertOctagon, Bell } from "lucide-react";
 import type { KpiData } from "@/services/wazuhApi";
 
 interface Props {
@@ -24,11 +24,11 @@ const KpiCards = ({ kpi, loading }: Props) => {
       glow:  "soc-glow-primary",
     },
     {
-      label: "IP đã bị chặn",
-      value: loading ? "…" : String(kpi?.blockedIps ?? 0),
-      icon:  ShieldBan,
-      color: "text-accent" as const,
-      glow:  "soc-glow-accent",
+      label: "Mức cảnh báo nghiêm trọng",
+      value: loading ? "…" : (kpi?.criticalAlerts ?? 0).toLocaleString(),
+      icon:  AlertOctagon,
+      color: "text-danger" as const,
+      glow:  "soc-glow-danger",
     },
     {
       label: "Tổng số cảnh báo",

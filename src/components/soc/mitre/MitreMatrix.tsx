@@ -90,7 +90,7 @@ const MitreMatrix = ({
                               type="button"
                               onClick={() => onSelectTechnique(technique)}
                               className={[
-                                "group w-full rounded-2xl border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/60",
+                                "group w-full whitespace-normal rounded-2xl border p-3 text-left transition-all duration-200 hover:-translate-y-0.5 hover:border-primary/50 focus:outline-none focus:ring-2 focus:ring-primary/60",
                                 getHeatTone(technique.coverage),
                                 isSelected ? "ring-2 ring-primary/60" : "",
                               ].join(" ")}
