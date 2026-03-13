@@ -18,32 +18,36 @@ const sevColor: Record<string, string> = {
   "Nghiêm trọng": "bg-danger/20 text-danger",
   "Cao":           "bg-warning/20 text-warning",
   "Trung bình":    "bg-info/20 text-info",
+  "Thấp":          "bg-secondary text-muted-foreground",
 };
 
 function sevLabel(level: number) {
   if (level >= 14) return "Nghiêm trọng";
   if (level >= 10) return "Cao";
-  return "Trung bình";
+  if (level >= 5)  return "Trung bình";
+  return "Thấp";
 }
 
-function deriveStatus(a: WazuhAlertDisplay, idx: number) {
-  if (a.level >= 14) return idx % 2 === 0 ? "Đang mở" : "Đang điều tra";
-  if (a.level >= 10) return idx % 3 === 0 ? "Đã xử lý" : "Đang mở";
+// Status derived purely from rule level — no fake index cycling
+function deriveStatus(level: number): string {
+  if (level >= 14) return "Đang mở";
+  if (level >= 10) return "Đang điều tra";
   return "Đã xử lý";
 }
 
 function buildIncidents(alerts: WazuhAlertDisplay[]) {
   return alerts
-    .filter((a) => a.level >= 10)
-    .slice(0, 20)
+    .filter((a) => a.level >= 5)
     .map((a, idx) => ({
-      id:       `INC-${String(idx + 1).padStart(3, "0")}`,
+      id:       `INC-${String(idx + 1).padStart(4, "0")}`,
       title:    a.description,
       severity: sevLabel(a.level),
-      status:   deriveStatus(a, idx),
-      assignee: idx % 3 === 0 ? "SOC-Analyst-1" : idx % 3 === 1 ? "SOC-Analyst-2" : "Chưa phân công",
-      alerts:   a.level >= 14 ? 4 + (idx % 8) : 1 + (idx % 4),
-      updated:  a.timestamp.split(" ")[1] ?? a.timestamp,
+      status:   deriveStatus(a.level),
+      // Real agent hostname from Wazuh — not a fake analyst name
+      agent:    a.agent || "—",
+      ruleId:   a.ruleId,
+      srcIp:    a.srcIp || "—",
+      updated:  a.timestamp,
     }));
 }
 
@@ -53,10 +57,15 @@ const IncidentDetection = () => {
 
   return (
     <div className="space-y-4">
-      <h2 className="text-sm font-mono font-semibold text-primary uppercase tracking-wider flex items-center gap-2">
-        <AlertTriangle className="h-4 w-4" />
-        Phát hiện sự cố &amp; Phân loại
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-mono font-semibold text-primary uppercase tracking-wider flex items-center gap-2">
+          <AlertTriangle className="h-4 w-4" />
+          Phát hiện sự cố &amp; Phân loại – 24 giờ qua
+        </h2>
+        <span className="text-xs font-mono text-muted-foreground">
+          {loading ? "…" : `${incidents.length} sự cố`}
+        </span>
+      </div>
 
       {error && (
         <div className="px-4 py-2 rounded border border-danger/30 bg-danger/10 text-danger text-xs font-mono">
@@ -93,25 +102,26 @@ const IncidentDetection = () => {
                 <th>Mã sự cố</th>
                 <th>Mức độ</th>
                 <th>Trạng thái</th>
-                <th>Tiêu đề</th>
-                <th>Phân công</th>
-                <th>Cảnh báo</th>
-                <th>Cập nhật</th>
+                <th>Mô tả</th>
+                <th>Agent</th>
+                <th>Rule ID</th>
+                <th>IP nguồn</th>
+                <th>Thời gian</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 [1, 2, 3].map((i) => (
                   <tr key={i}>
-                    {[1, 2, 3, 4, 5, 6, 7].map((j) => (
+                    {[1, 2, 3, 4, 5, 6, 7, 8].map((j) => (
                       <td key={j}><div className="h-3 w-16 bg-secondary rounded animate-pulse" /></td>
                     ))}
                   </tr>
                 ))
               ) : incidents.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="text-center text-muted-foreground py-4 text-xs font-mono">
-                    Không có sự cố nghiêm trọng
+                  <td colSpan={8} className="text-center text-muted-foreground py-4 text-xs font-mono">
+                    Không có sự cố (level ≥ 5) trong 24 giờ qua
                   </td>
                 </tr>
               ) : (
@@ -127,9 +137,10 @@ const IncidentDetection = () => {
                           {inc.status}
                         </span>
                       </td>
-                      <td className="text-foreground max-w-[300px] truncate">{inc.title}</td>
-                      <td className="text-muted-foreground">{inc.assignee}</td>
-                      <td className="text-accent">{inc.alerts}</td>
+                      <td className="text-foreground max-w-[260px] truncate">{inc.title}</td>
+                      <td className="text-muted-foreground">{inc.agent}</td>
+                      <td className="text-muted-foreground">{inc.ruleId}</td>
+                      <td className="text-accent">{inc.srcIp}</td>
                       <td className="text-muted-foreground whitespace-nowrap">{inc.updated}</td>
                     </tr>
                   );
