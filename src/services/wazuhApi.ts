@@ -749,29 +749,51 @@ export async function getBlockedIPs(): Promise<TopAttacker[]> {
   }));
 }
 
-/** Geo distribution of attackers over the last 24 hours (all countries). */
+/** Geo distribution of attackers over the last 24 hours (all countries).
+ *  Supports both legacy GeoLocation.country_name and newer geo.country fields.
+ */
 export async function getGeoData(): Promise<GeoPoint[]> {
-  const data = await esPost({
-    size: 0,
-    query: {
-      bool: {
-        must: [
-          { exists: { field: "GeoLocation.country_name" } },
-          { range: { "@timestamp": { gte: "now-24h" } } },
-        ],
+  // Run two aggregations in parallel: one per geo field
+  const [legacyData, newData] = await Promise.all([
+    esPost({
+      size: 0,
+      query: {
+        bool: {
+          must: [
+            { exists: { field: "GeoLocation.country_name" } },
+            { range: { "@timestamp": { gte: "now-24h" } } },
+          ],
+        },
       },
-    },
-    aggs: {
-      by_country: {
-        terms: { field: "GeoLocation.country_name", size: 100 },
+      aggs: { by_country: { terms: { field: "GeoLocation.country_name", size: 100 } } },
+    }),
+    esPost({
+      size: 0,
+      query: {
+        bool: {
+          must: [
+            { exists: { field: "geo.country" } },
+            { range: { "@timestamp": { gte: "now-24h" } } },
+          ],
+        },
       },
-    },
-  });
+      aggs: { by_country: { terms: { field: "geo.country", size: 100 } } },
+    }),
+  ]);
 
-  return (data.aggregations?.by_country?.buckets ?? []).map((b: any) => ({
-    country: String(b.key),
-    hits:    Number(b.doc_count),
-  }));
+  // Merge both result sets, summing counts for the same country
+  const countryMap = new Map<string, number>();
+  for (const b of [
+    ...(legacyData.aggregations?.by_country?.buckets ?? []),
+    ...(newData.aggregations?.by_country?.buckets ?? []),
+  ]) {
+    const key = String(b.key);
+    if (key) countryMap.set(key, (countryMap.get(key) ?? 0) + Number(b.doc_count));
+  }
+
+  return [...countryMap.entries()]
+    .map(([country, hits]) => ({ country, hits }))
+    .sort((a, b) => b.hits - a.hits);
 }
 
 /** Real-time attack-map view with limited live stream plus server-side aggregations. */

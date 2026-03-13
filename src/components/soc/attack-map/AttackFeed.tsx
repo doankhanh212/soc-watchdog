@@ -18,13 +18,13 @@ const AttackFeed = ({ alerts, loading }: Props) => {
           <div className="mb-2 flex items-center gap-2 text-primary">
             <Wifi className="h-4 w-4" />
             <span className="text-[11px] font-mono uppercase tracking-[0.28em] text-primary/80">
-              Lu\u1ed3ng tr\u1ef1c ti\u1ebfp
+              Luồng trực tiếp
             </span>
           </div>
-          <h2 className="text-lg font-semibold text-foreground">Lu\u1ed3ng c\u1ea3nh b\u00e1o b\u1ea3o m\u1eadt th\u1eddi gian th\u1ef1c</h2>
+          <h2 className="text-lg font-semibold text-foreground">Luồng cảnh báo bảo mật thời gian thực</h2>
         </div>
         <div className="rounded-full border border-success/30 bg-success/10 px-3 py-1 text-[11px] font-mono uppercase tracking-[0.2em] text-success">
-          \u0110\u1ed3ng b\u1ed9 30s
+          Đồng bộ 30s
         </div>
       </div>
 
@@ -36,7 +36,7 @@ const AttackFeed = ({ alerts, loading }: Props) => {
             ))
           ) : alerts.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-border/70 bg-secondary/10 px-4 py-10 text-center text-sm text-muted-foreground">
-              Kh\u00f4ng c\u00f3 c\u1ea3nh b\u00e1o n\u00e0o c\u00f3 IP ngu\u1ed3n trong 24 gi\u1edd qua.
+              Không có cảnh báo nào có IP nguồn trong 24 giờ qua.
             </div>
           ) : (
             alerts.slice(0, MAX_FEED).map((alert) => {
@@ -62,22 +62,22 @@ const AttackFeed = ({ alerts, loading }: Props) => {
 
                   <div className="grid gap-3 text-xs text-muted-foreground sm:grid-cols-2 md:grid-cols-4">
                     <div>
-                      <div className="font-mono uppercase tracking-[0.18em]">Th\u1eddi gian</div>
+                      <div className="font-mono uppercase tracking-[0.18em]">Thời gian</div>
                       <div className="mt-1 text-foreground">{formatAttackTime(alert.rawTimestamp)}</div>
                     </div>
                     <div>
-                      <div className="font-mono uppercase tracking-[0.18em]">IP ngu\u1ed3n</div>
+                      <div className="font-mono uppercase tracking-[0.18em]">IP nguồn</div>
                       <div className="mt-1 font-mono text-primary">{alert.srcIp || "—"}</div>
                     </div>
                     {alert.destIp && (
                       <div>
-                        <div className="font-mono uppercase tracking-[0.18em]">IP \u0111\u00edch</div>
+                        <div className="font-mono uppercase tracking-[0.18em]">IP đích</div>
                         <div className="mt-1 font-mono text-info">{alert.destIp}</div>
                       </div>
                     )}
                     <div className="flex items-center gap-2">
                       <Activity className="h-3.5 w-3.5 text-primary" />
-                      <span className="text-foreground">M\u1ee9c {alert.level}</span>
+                      <span className="text-foreground">Mức {alert.level}</span>
                     </div>
                   </div>
                 </article>
