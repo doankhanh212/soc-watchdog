@@ -13,7 +13,8 @@ pnpm-debug.log*
 lerna-debug.log*
 
 node_modules
-dist/
+# Build output — committed so VPS can deploy without running npm install
+# dist/
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json
