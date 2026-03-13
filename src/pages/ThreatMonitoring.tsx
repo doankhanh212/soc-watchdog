@@ -1,5 +1,5 @@
-import { Suspense, lazy } from "react";
 import AttackFeed from "@/components/soc/attack-map/AttackFeed";
+import AttackOriginPanel from "@/components/soc/attack-map/AttackOriginPanel";
 import AttackStatsPanel from "@/components/soc/attack-map/AttackStatsPanel";
 import { useAttackMapInsights } from "@/hooks/useAttackMapInsights";
 import { formatAttackTime } from "@/utils/attackMap";
@@ -12,15 +12,11 @@ import {
   Zap,
 } from "lucide-react";
 
-const RealTimeAttackMap = lazy(
-  () => import("@/components/soc/attack-map/RealTimeAttackMap"),
-);
-
 const ThreatMonitoring = () => {
   const { data, loading, refreshing, lastUpdated, error } =
     useAttackMapInsights();
 
-  const geoAlerts = (data?.alerts ?? []).filter((a) => !!a.country);
+  const geoAlertCount = (data?.alerts ?? []).filter((a) => !!a.country).length;
 
   return (
     <div className="space-y-6">
@@ -69,7 +65,7 @@ const ThreatMonitoring = () => {
                 <span className="text-[10px] font-mono uppercase tracking-[0.18em]">Dấu vết</span>
               </div>
               <p className="mt-1.5 text-sm text-foreground">
-                {loading ? "…" : `${geoAlerts.length} địa lý / ${(data?.alerts ?? []).length} tổng`}
+                {loading ? "…" : `${geoAlertCount} địa lý / ${(data?.alerts ?? []).length} tổng`}
               </p>
             </div>
           </div>
@@ -86,17 +82,7 @@ const ThreatMonitoring = () => {
 
       {/* ── Map + Stats grid ─────────────────────────────────────────────── */}
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1.6fr)_minmax(360px,0.85fr)]">
-        <Suspense
-          fallback={
-            <div className="soc-card flex h-[660px] items-center justify-center border-info/20 bg-[linear-gradient(180deg,rgba(2,6,23,0.98),rgba(3,10,22,0.96))]">
-              <p className="text-xs font-mono text-muted-foreground animate-pulse">
-                Đang khởi tạo bản đồ tấn công...
-              </p>
-            </div>
-          }
-        >
-          <RealTimeAttackMap alerts={geoAlerts} loading={loading} />
-        </Suspense>
+        <AttackOriginPanel data={data} loading={loading} />
         <AttackStatsPanel data={data} loading={loading} />
       </div>
 

@@ -14,6 +14,20 @@ interface Props {
 
 const TOP_COUNT = 10;
 
+// Detect whether a string looks like an IPv4 address
+const IS_IP_RE = /^\d{1,3}\.\d{1,3}/;
+
+function resolveIso(name: string): string {
+  if (!name || name === "Others") return "un";
+  const overrides: Record<string, string> = {
+    "Russia": "ru", "South Korea": "kr", "Vietnam": "vn",
+    "Iran": "ir", "Taiwan": "tw", "United Kingdom": "gb",
+    "China": "cn", "United States": "us", "United States of America": "us",
+  };
+  if (overrides[name]) return overrides[name];
+  return lookup.byCountry(name)?.iso2?.toLowerCase() ?? "un";
+}
+
 // Gradient definitions for SVG
 const Gradients = () => (
   <defs>
@@ -25,36 +39,25 @@ const Gradients = () => (
 );
 
 const CustomYAxisTick = ({ x, y, payload }: any) => {
-  const countryName = payload.value;
-  let isoCode = "un";
-
-  if (countryName !== "Others") {
-    const found = lookup.byCountry(countryName);
-    if (found) isoCode = found.iso2.toLowerCase();
-    if (!found && countryName === "Russia") isoCode = "ru";
-    if (!found && countryName === "South Korea") isoCode = "kr";
-    if (!found && countryName === "Vietnam") isoCode = "vn";
-    if (!found && countryName === "Iran") isoCode = "ir";
-    if (!found && countryName === "Taiwan") isoCode = "tw";
-    if (!found && countryName === "United Kingdom") isoCode = "gb";
-    if (!found && countryName === "China") isoCode = "cn";
-    if (!found && countryName === "United States") isoCode = "us";
-  }
+  const countryName: string = payload.value;
+  const isIp = IS_IP_RE.test(countryName);
+  const showFlag = !isIp && countryName !== "Others";
 
   return (
     <g transform={`translate(${x},${y})`}>
       <foreignObject x={-140} y={-10} width={135} height={20}>
         <div className="flex items-center justify-end w-full h-full gap-2 pr-2">
           <span
-            className="text-xs font-mono text-muted-foreground truncate max-w-[90px] text-right"
+            className="text-xs font-mono text-muted-foreground truncate text-right"
+            style={{ maxWidth: isIp ? 125 : 90 }}
             title={countryName}
           >
             {countryName}
           </span>
-          {countryName !== "Others" && (
+          {showFlag && (
             <span
-              className={`fi fi-${isoCode} rounded-sm shadow-sm`}
-              style={{ width: "16px", height: "12px" }}
+              className={`fi fi-${resolveIso(countryName)} rounded-sm shadow-sm`}
+              style={{ width: "16px", height: "12px", flexShrink: 0 }}
             />
           )}
         </div>
@@ -103,7 +106,9 @@ const GeoAttackMap = ({ geoData, loading }: Props) => {
     <div className="soc-card h-full flex flex-col">
       <h2 className="text-sm font-mono font-semibold text-primary uppercase tracking-wider mb-4 flex items-center gap-2">
         <Globe className="h-4 w-4" />
-        Bản đồ tấn công địa lý (Top Origins)
+        {processedData.length > 0 && IS_IP_RE.test(processedData[0].country)
+          ? "Top IP nguồn tấn công"
+          : "Bản đồ tấn công địa lý (Top Origins)"}
       </h2>
 
       <div className="flex-1 min-h-[300px]">

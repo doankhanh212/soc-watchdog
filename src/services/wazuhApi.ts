@@ -832,9 +832,18 @@ export async function getGeoData(): Promise<GeoPoint[]> {
       countryMap.set(geo.country, (countryMap.get(geo.country) ?? 0) + hits);
   }
 
-  return [...countryMap.entries()]
-    .map(([country, hits]) => ({ country, hits }))
-    .sort((a, b) => b.hits - a.hits);
+  if (countryMap.size > 0) {
+    return [...countryMap.entries()]
+      .map(([country, hits]) => ({ country, hits }))
+      .sort((a, b) => b.hits - a.hits);
+  }
+
+  // Last-resort fallback: GeoIP unavailable — show raw source IPs so the chart
+  // always has data when there are known attacker addresses.
+  return [...ipHits.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 15)
+    .map(([country, hits]) => ({ country, hits }));
 }
 
 /** Real-time attack-map view with limited live stream plus server-side aggregations. */
