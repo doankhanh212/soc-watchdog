@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  HQG Security SOC Platform – Shodan‑style Global Cyber Attack Map
+//  Security SOC Platform – Shodan‑style Global Cyber Attack Map
 // ─────────────────────────────────────────────────────────────────────────────
 //  Visual design inspired by Shodan / Kaspersky cyber‑map:
 //    • Animated missile trajectory lines (LinesChart + effect) per severity

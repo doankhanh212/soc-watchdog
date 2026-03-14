@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  HQG Security SOC Platform – Bản đồ tấn công địa lý (Geo Attack Map Page)
+//  Security SOC Platform – Bản đồ tấn công địa lý (Geo Attack Map Page)
 // ─────────────────────────────────────────────────────────────────────────────
 //  Visualises live attack origins on a Shodan / Kaspersky-style world map.
 //

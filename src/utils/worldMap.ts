@@ -29,7 +29,7 @@ const COUNTRY_ALIASES: Record<string, string> = {
 };
 
 const SOC_TARGET = {
-  name: (import.meta.env.VITE_SOC_TARGET_NAME as string) ?? "HQG SOC Core",
+  name: (import.meta.env.VITE_SOC_TARGET_NAME as string) ?? "SOC Core",
   coords: [
     Number(import.meta.env.VITE_SOC_TARGET_LON ?? 105.8342),
     Number(import.meta.env.VITE_SOC_TARGET_LAT ?? 21.0278),

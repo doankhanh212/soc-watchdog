@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  HQG Security SOC Platform – Wazuh / OpenSearch API service
+//  Security SOC Platform – Wazuh / OpenSearch API service
 // ─────────────────────────────────────────────────────────────────────────────
 //  Required environment variables (.env):
 //    VITE_WAZUH_URL       – base URL for API calls.

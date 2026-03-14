@@ -33,7 +33,7 @@ const DashboardHeader = () => {
           <Shield className="h-8 w-8 text-primary" />
           <div>
             <h1 className="text-lg font-bold tracking-widest text-primary font-mono uppercase">
-              HQG Security SOC Platform
+              Security SOC Platform
             </h1>
             <p className="text-xs text-muted-foreground tracking-wide">
               Trung tâm điều hành an ninh (SOC) – Giám sát mối đe dọa &amp; Phản ứng sự cố

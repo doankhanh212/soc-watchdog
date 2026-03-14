@@ -1,4 +1,4 @@
-# HQG Security SOC Platform
+# Security SOC Platform
 
 Security Operations Center – Threat Monitoring & Response
 

@@ -1,5 +1,5 @@
 // ─────────────────────────────────────────────────────────────────────────────
-//  HQG Security SOC Platform – Geo Attack Map Page Hook
+//  Security SOC Platform – Geo Attack Map Page Hook
 // ─────────────────────────────────────────────────────────────────────────────
 //  Fetches Wazuh alerts + AI anomaly events, resolves source IPs to geographic
 //  coordinates via the GeoIP module, and returns enriched event data for the
